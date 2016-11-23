@@ -1,8 +1,8 @@
 chordcalc Version 5.0
 =================
 
-Turning  Gek S. Low's chordcalc python script into a full-featured chord calculator/player 
-Updated to be a full featured stringed instrument chord analysis tool by Steven K Pollack
+A full-featured chord/scale calculator/player 
+by Steven K Pollack
 
 
 
@@ -28,8 +28,6 @@ downloads realistic sounds from github
 - **DropDown.py**
 
 The new features in 5.0 are:
-	
-- constants can now be reloaded. No longer "globals"
 
 - Chord, Capo, Filter and Instrument Tableviews can be edited to re-order or delete rows
 
@@ -53,7 +51,7 @@ The Save and Load buttons allow the user to save the current instrument, filters
 
 *Instrument Editor*
 
-Hitting the New button on the main menu brings up an instrument editor.  It will take the current selected instrument/tuning and allow you to adjust the tuning.  You can then save this to the Intrument/tuning list.  You will be forced to use a new name.  If you want to delete it later, you can edit the intrument/tuning list to remove it.  To have this intrument saved fo rhte next time you run chord calc, hit the "config" button to save it.  
+Hitting the New button on the main menu brings up an instrument editor.  It will take the current selected instrument/tuning and allow you to adjust the tuning.  You can then save this to the Intrument/tuning list.  You will be forced to use a new name.  If you want to delete it later, you can edit the intrument/tuning list to remove it.  To have this intrument saved for the next time you run chord calc, hit the "config" button to save it.  
 
 
 *Capos:*
@@ -84,7 +82,7 @@ The chord tones and notes are displayed in the upper right
 
 *Identify mode*
 
-In identify mode, you touch the fingerboard to indicate a fingering  When you hit Find, all possible "names" for the chord are given.  If the fingering is a chord partial, then the missing chord tones are indicated.  If there are capos, you will be prevented from fretting "behind" the capo.
+In identify mode, you touch the fingerboard to indicate a fingering  When you hit Find, all possible "names" for the chord are given.  If the fingering is a chord partial, then the missing chord tones are indicated.  If there are capos, you will be prevented from fretting "behind" the capo.  If you tap one of the "names" for the chord, all of its chord tones are displayed on the fretboad and the original notes in the query are circled.   Tapping the fretboard clears this "chord scale".
 
 *Scale Mode*
 
