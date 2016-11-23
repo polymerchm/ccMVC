@@ -41,14 +41,13 @@ button_load         - bring up a menu to load a saved state
 button_config       - save current configuration
 button_new          - brings up the instrument builder
 """
-######
-######
 
+import sys
+if '.' not in sys.path: sys.path.append('.')
 
 #--- Main imports
-import sys,os.path, re, ui, console, sound, time, math, json, importlib
+import os.path, re, ui, console, sound, time, math, json, importlib
 from operator import add,mul
-from copy import deepcopy
 import pubsub; importlib.reload(pubsub); from pubsub import pub
 from pubsub.core import TopicManager
 
@@ -57,9 +56,7 @@ defaultPublisher = pub.getDefaultPublisher()
 topicmgr = pubsub.core.TopicManager()
 topicmgr.clearTree()
 
-from functools import wraps
-
-if '.' not in sys.path: sys.path.append('.')
+#--- local imports
 import tvtool; importlib.reload(tvtool); from tvtool import TVTools
 import utilities; importlib.reload(utilities); from utilities import *
 import chordcalc_constants; importlib.reload(chordcalc_constants)
@@ -71,7 +68,7 @@ import DropDown; importlib.reload(DropDown); from DropDown import DropDown
 SettingsFileName = 'settings.ini'
 ConfigFileName = 'config.ini'
 
-#---CCC 
+#--- CCC 
 class CCC(object):
 	''' chordcalc constants '''
 	def __init__(self):
@@ -79,13 +76,15 @@ class CCC(object):
 		self.restoreConfig()
 		self.configActionSet = False
 		self.settingsActionsSet = False
-		self.smv = None
-
+		self.smv = None #settings main view
+		self.cmv = None #configuration main view
 		
 	def __getitem__(self,key): # all instance to be subscriptable
 		return self._ccc[key] if key in self._ccc else None
 
-		
+# Configuration maintenance code:
+#  non-default items in filters, capos, chords, progressions, and instruments
+			
 	def restoreConfig(self):
 		if not os.path.exists(ConfigFileName):
 			console.hud_alert('config file missing, restoring','error',2)
@@ -127,18 +126,25 @@ class CCC(object):
 			self.cmv = configMainView
 			self.cmv.hidden = True
 			
+	def onConfigMain(self,button):
+		mainViewShield.conceal()
+		self.cmv.hidden = False
+		self.cmv.bring_to_front()	
+			
 	def onCancelConfig(self,button):
 		mainViewShield.reveal()
 		self.cmv.hidden= True
 		
 	def onSaveConfig(self,button):
-		specialKeys = '''
+		''' saves items lists for the below mentioned tableViews. '''
+		specialKeys = ''' 
 		CAPOS
 		FILTER_LIST_CLEAN
 		TUNINGS
 		TUNING_LIST_CLEAN
 		CHORD_LIST_CLEAN
 		ROOT_LIST_CLEAN
+		PROG_LIST_CLEAN
 		'''.split()
 		
 		cccOut = {}
@@ -160,10 +166,12 @@ class CCC(object):
 		for filter in filters.items:
 			if not (filter['title'].endswith('_3') or filter['title'].endswith('_4')):
 				cccOut['FILTER_LIST_CLEAN'].append({'title': filter['title'],'desc':filter['desc'],
-																							'accessory_type': 'none'})		
+						'accessory_type': 'none'})		
 		cccOut['CHORD_LIST_CLEAN'] = [{'title':c['title'], 'fingering':c['fingering'],                  'accessory_type':'none'} for c in chord.items]
 		
 		cccOut['ROOT_LIST_CLEAN'] = [{'title':r['title'], 'noteValue':r['noteValue'], 'accessory_type': 'none'} for r in root.items]
+		
+		ccccOUT['PROG_LIST_CLEAN'] = [{'title':r['title'], 'chords':r['chords'], 'accessory_type':'none'}for r in progr.items]
 		
 		fh = open(ConfigFileName, 'w')
 		json.dump(cccOut,fh,indent=1)
@@ -171,15 +179,16 @@ class CCC(object):
 		mainViewShield.reveal()
 		self.cmv.hidden = True
 		
-	def onRestoreConfig(self):
+	def onRestoreConfig(self,button):
 		self._ccc = {}
 		for constant in cccInit.__dict__.keys():
 			if constant[0] != '_' and constant[0].isupper(): # a real constant
 				self._ccc[constant] = cccInit.__dict__[constant]
 				
-		pub.sendMessage('restore.instruments',items=self._ccc['TUNING_LIST_CLEAN'])
+		pub.sendMessage('restore.instrument',items=self._ccc['TUNING_LIST_CLEAN'])
 		pub.sendMessage('restore.capos', items=self._ccc['CAPOS'])
 		pub.sendMessage('restore.filters',items=self._ccc['FILTER_LIST_CLEAN'])
+		pub.sendMessage('restore.progressions',items=self._ccc['PROGR_LIST_CLEAN'])
 		pub.sendMessage('setmode',mode='C')
 		
 		fh = open(ConfigFileName,'w')
@@ -189,10 +198,7 @@ class CCC(object):
 		self.cmv.hidden = True
 
 			
-	def onSaveConfig(self,button):
-		mainViewShield.conceal()
-		self.cmv.hidden = False
-		self.cmv.bring_to_front()
+
 
 	def settingsViewInit(self,settingsMainView):
 		'''' save state of filters, instruments and capos in names file'''
@@ -315,7 +321,7 @@ class CCC(object):
 			self.settingsBtnDefault.enabled = False
 			self.tvSettingsList.editing = True
 								
-#---Model	
+#--- Model	
 
 class Model(object):
 	''' primary ChordCalc Model '''
@@ -453,8 +459,8 @@ class Model(object):
 		self._InstrumentTuning = data['notes']
 		self._InstrumentType = self.instrument_type()
 		self._InstrumentOctave = data['octave']
-		self._is5StringBanjo = True if (self._InstrumentType[0] == 'banjo' and 
-										len(self._InstrumentTuning) == 5) else False
+		self._is5StringBanjo = (self._InstrumentType[0] == 'banjo' and 
+										len(self._InstrumentTuning) == 5)
 		self._ShowChordScale = False
 		self._ChordScale = []
 		self._TwoOctaveScale = []
@@ -1544,7 +1550,13 @@ class Instrument(TVTools,object):
 		self.waveType = 'wav'
 		self.tuning = {}
 		pub.subscribe(self.addNewInstrument,'addnewinstrument')
+		pub.subscribe(self.restoreInstrument,'restore.instrument')
+	
 		
+	def restoreInstrument(self,items=None):
+		self.items = items
+		self.currentNumLines = len(self.items)
+		 			
 	@property
 	def current(self):
 		return self._current
@@ -3226,7 +3238,7 @@ class InstrumentEditor(ui.View):
 				self.octaveTextField.text = "{}".format(self.octave)
 				for i,octaveText in enumerate(self.octaveTextArray):
 					if i == string:
-						continue #
+						continue 
 					else:
 						thisOctave = int(octaveText.text)
 						octaveText.text = "{}".format(thisOctave+1)
@@ -3315,7 +3327,105 @@ def doScaleChange(sender,row):
 	
 	
 #---##########################################
-#---##########################################
+
+
+class Progr(TVTools,object):
+	''' create sets of chords that are relevant to current filtering for the designated progression '''
+	global curentState
+	def __init__(self):
+		self.items = [{'title':x['title'], 'chords':x['chords'], 'accessory_type':'none'}
+																															for x in ccc['PROGRESSION']]
+		#self.delegator = panelView('tableview_prog')
+		self._progChords = []
+		self._progFingerings = []
+		
+	def onEdit(self,button):
+		if self.delegator.editing:
+			self.delegator.editing = False
+			self.delegator.reload_data()
+		else:
+			self.delegator.editing = True
+			self._progChords = []
+			
+			for item in self.items:
+				item['accessory_type'] = 'none'
+				
+				
+	def reset(self):
+		for item in self.items:
+			item['accessory_type'] = 'none'
+			
+	def createProgressionFingerings(self):
+		self._progFingerings= []
+		for chord in self._progChords:
+			self._progFingerings.append(calc_fingerings(chordtypeEntry=chord))
+			
+	def getProgressionChords(self,row):
+		key = root.root
+		keyNoteValue = root.noteValue
+		self._progChords = []
+		if key:
+			for chord in self.items[row]['chords']:
+				offset,type = chord.split('-')
+				realNote = (int(offset)+keyNoteValue) % 12
+				self._progChords.append((ccc['NOTE_NAMES'][realNote],realNote,type))
+				
+# action for select
+
+	def tableview_did_select(self,tableView,section,row):   #progression
+		self.setTableViewItemsRow(row)
+		self._prog = self.getProgressionChords(row)
+		tableView.reload_data()
+		self.current = {'title': self.items[row]['title'], 'chords': self.items[row]['chords'], 'row':row}
+		
+		self.createProgressionFingerings()
+		
+		
+		
+		
+	def tableview_number_of_sections(self, tableview):
+		# Return the number of sections (defaults to 1)
+		return 1
+		
+	def tableview_number_of_rows(self, tableview, section):
+		# Return the number of rows in the section
+		return len(self.items)
+		
+	def tableview_cell_for_row(self, tableview, section, row):
+		# Create and return a cell for the given section/row
+		cell = ui.TableViewCell()
+		cell.text_label.text = self.items[row]['title']
+		cell.accessory_type = self.items[row]['accessory_type']
+		return cell
+		
+	def tableview_can_delete(self, tableview, section, row):
+		# Return True if the user should be able to delete the given row.
+		return False
+		
+	def tableview_can_move(self, tableview, section, row):
+		# Return True if a reordering control should be shown for the given row (in editing mode).
+		return True
+		
+	def tableview_delete(self, tableview, section, row):
+		# Called when the user confirms deletion of the given row.
+		self.currentNumLines -=1 # see above regarding hte "syncing"
+		self.delegator.delete_rows((row,)) # this animates the deletion  could also 'tableview.reload_data()'
+		del self.items[row]
+		
+	def tableview_move_row(self, tableview, from_section, from_row, to_section, to_row):
+		# Called when the user moves a row with the reordering control (in editing mode).
+		self.items = listShuffle(self.items,from_row,to_row)
+		
+	@property
+	def prog(self):
+		return self._prog
+		
+	@prog.setter
+	def prog(self,value):
+		self._prog = value
+		
+#--- MAIN PROGRAM 
+
 if __name__ == "__main__":
 
 
@@ -3341,10 +3451,8 @@ if __name__ == "__main__":
 
 
 	screenSize = ui.get_screen_size()
-	aspect = screenSize[0]/screenSize[1]
-	aspect = aspect if aspect > 1 else 1/aspect
-	
-
+#	aspect = screenSize[0]/screenSize[1]
+#	aspect = aspect if aspect > 1 else 1/aspect
 	screenHeight = min(screenSize)
 	screenWidth = max(screenSize)
 			
@@ -3355,8 +3463,7 @@ if __name__ == "__main__":
 	middle_field = mainView['label_middle']
 	fretboard = mainView['fretboard']
 	tvRoot = mainView['tableview_root']
-	root_list = ccc['ROOT_LIST_CLEAN']
-	root = Root(root_list)
+	root = Root(ccc['ROOT_LIST_CLEAN'])
 	tvRoot.data_source = tvRoot.delegate = root
 	
 	tvType = mainView['tableview_type']
@@ -3377,8 +3484,7 @@ if __name__ == "__main__":
 	
 	
 	# fretboard is a custom view and is instanciated by the ui.load_view process
-	tuning_list = ccc['TUNING_LIST_CLEAN']
-	instrument = Instrument(tuning_list)
+	instrument = Instrument(ccc['TUNING_LIST_CLEAN'])
 	mainView['button_edit_instrument'].action = instrument.onEdit
 	instrument.reset()
 	tvInst.data_source = tvInst.delegate = fretboard.instrument = instrument
@@ -3403,8 +3509,7 @@ if __name__ == "__main__":
 	tvScale = mainView['tableview_scale']
 	tvScale.data_source.items = []
 	tvScale.hidden = True
-	scale_list = ccc['SCALE_LIST_CLEAN']
-	scale = Scale(scale_list)
+	scale = Scale(ccc['SCALE_LIST_CLEAN'])
 	tvScale.data_source = tvScale.delegate = scale
 	
 	mainView['button_arp'].action = play
@@ -3423,8 +3528,7 @@ if __name__ == "__main__":
 	mainView['lbl_definition'].hidden = True
 	
 	tvCapos = mainView['tableview_capos']
-	capo_list = ccc['CAPOS']
-	capos = Capos(capo_list)
+	capos = Capos(ccc['CAPOS'])
 	pub.subscribe(capos.syncNumStrings,'syncnumstrings')
 	mainView['button_edit_capos'].action = capos.onEdit
 	tvCapos.data_source = tvCapos.delegate = capos
@@ -3446,28 +3550,16 @@ if __name__ == "__main__":
 			spanSpinner.value = span
 			spanSpinner.limits  = (1,span+2)
 	pub.subscribe(syncSpanSpinner,'syncspanspinner')
-			
-#	scaleSpinner = Spinner(spinnerSize=(100,40),
-#												name='sp_scale',
-#												fontSize = 12,
-#												initialValue=['normal','down','open','FourOnString'],
-#												action=onScaleSpinner,wrap = True
-#												)												
-#	mainView.add_subview(scaleSpinner)
-#	scaleSpinner.position = (570,300)		
-#	scaleSpinner.hidden = True		
-
-	
+	progr = Progr()
 	mainView['view_fretEnter'].hidden = True
 	mainView['sp_span'].hidden = True
-	mainView['button_save_config'].action = ccc.onSaveConfig
+	mainView['button_save_config'].action = ccc.onConfigMain
 	mainView['view_settingsView'].hidden = True
 	settings = SettingListDelegate()
 	mainView['view_settingsView']['tv_SettingsList'].data_source = settings
 	mainView['view_settingsView']['tv_SettingsList'].delegate = settings
 	mainView['button_save'].action = ccc.onSettingsSave
-	mainView['button_load'].action = ccc.onSettingsLoad
-	
+	mainView['button_load'].action = ccc.onSettingsLoad	
 	mainView['view_instrumentEditor'].hidden = True
 	mainView['button_new_instrument'].action = mainView['view_instrumentEditor'].onNewInstrument
 	mainView['tri_chord_label'].frame = (-200,-200,0,0) # since it wont' hide,send it to hell!!!!'
@@ -3481,7 +3573,7 @@ if __name__ == "__main__":
 								   {'title':'progr','tag':'P'}],
 							action=toggle_mode
 							)
-	
+
 	mainView.add_subview(modeDropDown)
 	toggle_mode(modeDropDown,0) # default to calc
 	mainView.present(style='full_screen',orientations=('landscape',))

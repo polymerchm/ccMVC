@@ -390,7 +390,7 @@ CAPOS = [
          {'title':		'Banjo 5th',			'fret':	0,	'mask': (1,), 				 'accessory_type': 'none'},
         ]	
         
-PROGRESSION = [
+PROGRESSIONS = [
 							{'title': 'I-V', 	'chords':['0-maj','7-min']},
 							{'title': 'I-V7', 'chords':['0-maj', '7-7']},
 							{'title': 'I-IV-V', 'chords':['0-maj','5-maj','7-maj']},
@@ -399,3 +399,5 @@ PROGRESSION = [
 							{'title': 'iim7-V7-IM7', 'chords':['2-m7','7-7','0-M7']},
 							{'title': 'vim7-iim7-V7-IM7', 'chords':['9-m7','2-m7','7-7','0-M7']},
 						  ]
+PROG_LIST_CLEAN = [{'title': r['title'], 'chords':r['chords'], 'accessory_type': 'none'} for 
+					r in PROGRESSIONS]
