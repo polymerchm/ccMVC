@@ -32,8 +32,6 @@ dirs = {
         'acoustic_guitar_steel-mp3':	'guitar',
         'acoustic_bass-mp3':					'bass',
         'banjo-mp3':									'banjo',
-        'pizzicato_strings-mp3':			'pizzicato',
-        'tremolo_strings-mp3':				'tremolo',
         }
 
 
