@@ -3,6 +3,8 @@
 
 """
 Chord Calculator
+Progressions Branch
+
 
 Copyright (c) August 19th, 2014 Steven K. Pollack
 Version 6.0
@@ -188,7 +190,7 @@ class CCC(object):
 		pub.sendMessage('restore.instrument',items=self._ccc['TUNING_LIST_CLEAN'])
 		pub.sendMessage('restore.capos', items=self._ccc['CAPOS'])
 		pub.sendMessage('restore.filters',items=self._ccc['FILTER_LIST_CLEAN'])
-		pub.sendMessage('restore.progressions',items=self._ccc['PROGR_LIST_CLEAN'])
+		#pub.sendMessage('restore.progressions',items=self._ccc['PROGR_LIST_CLEAN'])
 		pub.sendMessage('setmode',mode='C')
 		
 		fh = open(ConfigFileName,'w')
@@ -197,9 +199,7 @@ class CCC(object):
 		mainViewShield.reveal()
 		self.cmv.hidden = True
 
-			
-
-
+		
 	def settingsViewInit(self,settingsMainView):
 		'''' save state of filters, instruments and capos in names file'''
 		if not self.settingsActionsSet:
@@ -343,9 +343,11 @@ class Model(object):
 		self._Span = None	  # int number of frets to search for a chord range	
 		self._playbackSpeed = None  # int
 		self._Volume = None # int number
+		
 		self._Fingerings = []	
 		self._FingeringPointer = 0
 		self._NumberofFingerings = None
+		
 		self._ChordNotes = ''		
 		self._ScaleNotes = None
 		self._RootNoteValue = None
@@ -356,10 +358,17 @@ class Model(object):
 		self._is5StringBanjo = None
 		self._ScaleFrets = None
 		self._TwoOctaveScale=None
+		
 		self._FindKey = None
 		self._FindChord = None
-
-
+		
+		self._ProgChordPointer = 0 # which progression
+		self._ProgFingerings = None # array of array of progression fingerings
+		self._ProgFingeringsPointers = None # array of progression fingerings pointers
+		self._ProgChords = None # array of  progression chords and roots
+		self._ProgCentroid = None # fret centroid of currently displayed chord
+		self._ProgCentroidMode = False
+	
 #--- ---fretboard constants
 
 		self.fretboard_NutOffset = 20
@@ -397,6 +406,10 @@ class Model(object):
 		pub.subscribe(self.setFindScale,'updatefindscale')
 		pub.subscribe(self.setCapoFret,'setcapofret')
 		pub.subscribe(self.changeSettings,'changesettings')
+		pub.subscribe(self.setProgressions,'setprogressiondata')
+		pub.subscribe(self.updateProgressionPointers,'updateprogressionpointers')
+		pub.subscribe(self.updateCentroidSwitch,'centroidswitch')
+
 			
 		######################################		
 		#handy status variable
@@ -418,10 +431,17 @@ class Model(object):
 	def changeRoot(self, root=None, value=None):
 		self._RootNoteValue = value
 		self._RootNoteName = root
-		self._Fingerings = self.calc_fingerings()
-		self._TwoOctaveScale = []
+		if self._Mode in ('C', 'S'):
+			self._Fingerings = self.calc_fingerings()
+		elif self._Mode == 'P':
+			pub.sendMessage('updateProgressionSettings')
+		if self._Mode == 'S':
+			self._TwoOctaveScale = []
 		self.updateFretboard()
 		
+	def updateCentroidSwitch(self,switch=None):
+		self._ProgCentroidMode = switch
+
 		
 	def changeScale(self,scale=None):
 		self._ScaleName = scale['title']
@@ -446,8 +466,10 @@ class Model(object):
 			del self._Capos[fret]
 		else:
 			self._Capos[fret] = mask
-		if self._Mode == "C":
-			self._Fingerings = self.calc_fingerings()	
+		if self._Mode in ('C', 'S'):
+			self._Fingerings = self.calc_fingerings()
+		elif self._Mode == 'P':
+			pub.sendMessage('updateProgressionSettings')
 		# clear out any only fretboard displaying lists
 		self._ChordScale = []
 		self._showChordScale = False
@@ -468,6 +490,12 @@ class Model(object):
 		self._FindKey = None
 		self._FindChord = []
 		self._Capos = {}
+		self._ProgChordPointer = 0 
+		self._ProgFingerings = None 
+		self._ProgFingeringsPointers = None 
+		self._ProgChords = None 
+		self._ProgCentroid = None 
+
 		
 		pub.sendMessage('update.tuningbuttontext',text=self._InstrumentTuning)
 		pub.sendMessage('syncspanspinner',span=self._Span)
@@ -494,24 +522,41 @@ class Model(object):
 			if (self._FindKey and self._FindChord):			
 				self._ChordScale = self.calc_chord_scale(pKey=self._FindKey, pChord=self._FindChord)
 		elif self._Mode == 'P':
-			handleProgressions()
-		pub.sendMessage('update.fretboard',	mode=self._Mode, 
-											fingerings=self._Fingerings,
-											fingeringPointer = self._FingeringPointer, 
-											scaleNotes=self._ScaleNotes,
-											showScale=self._ShowChordScale,
-											chordScale = self._ChordScale,
-											twoOctaveScale = self._TwoOctaveScale,
-											tuning=self._InstrumentTuning,
-											type = self._InstrumentType,
-											is5StringBanjo = self._is5StringBanjo,
-											root = self._RootNoteName,
-											chordName=self._ChordName,
-											chordNoteValues=self._ChordNoteValues,
-											rootNoteValue = self._RootNoteValue,
-											scale = self._ScaleNotes,
-											capos=self._Capos
-											)
+			if not self._ProgFingeringsPointers:
+				return
+			elif not self._ProgFingerings:
+				return
+			elif not self._ProgChordPointer:
+				return
+			else:
+				theseFingerings = self._ProgFingerings[self._ProgChordPointer]
+				thisPointer = self._ProgFingeringsPointers[self._ProgChordPointer]
+				self._ProgFingerings[self._ProgChordPointer] = self.calc_fingerings()
+				self._ProgCentroid = theseFingerings[thisPointer][-1]	
+				setChordSpelling(keyNoteValue=self._RootNoteValue, keyName=self._RootNoteName, 							chordNoteValues=self._ChordNoteValues)		
+		pub.sendMessage('update.fretboard',	
+						mode=self._Mode, 
+						fingerings=self._Fingerings,
+						fingeringPointer = self._FingeringPointer, 
+						scaleNotes=self._ScaleNotes,
+						showScale=self._ShowChordScale,
+						chordScale = self._ChordScale,
+						twoOctaveScale = self._TwoOctaveScale,
+						tuning=self._InstrumentTuning,
+						type = self._InstrumentType,
+						is5StringBanjo = self._is5StringBanjo,
+						root = self._RootNoteName,
+						chordName=self._ChordName,
+						chordNoteValues=self._ChordNoteValues,
+						rootNoteValue = self._RootNoteValue,
+						scale = self._ScaleNotes,
+						capos=self._Capos,
+						progFingeringsPointers = self._ProgFingeringsPointers,
+						progChordPointer = self._ProgChordPointer,
+						progFingerings = self._ProgFingerings,
+						progChordInfo = self._ProgChords,
+						progCentroid = self._ProgCentroid	
+						)
 						
 											
 	def updateMultiDisplays(self):
@@ -581,10 +626,46 @@ class Model(object):
 		else:
 			return (None,None)	
 			
+	def updateProgressionPointers(self,nextChord=None,nextFingering=None):
+		''' Change pointers to chords for fretboard viewing
+			nextChord = -1 (previous) 0 no change +1 next
+			nextFingering = -n (up neck) 0 (no change) +n (down neck
+		'''
+		if nextChord >= 0:
+			if self._ProgCentroidMode and self._ProgCentroid:
+				found = False
+				for increment in (0.5, 1.0, 2.0, 3.0):
+					for i,fingering in enumerate(self._ProgFingerings[self._ProgChordPointer]):
+						centroid = fingering[-1]
+						if abs(centroid - model._ProgCentroid) < increment:
+							found = True
+							pointer = i
+							break
+					if found:
+						break
+			else:
+				pointer = self._ProgFingeringsPointers[self._ProgChordPointer]
+				centroid = self._ProgFingerings[self._ProgChordPointer][0][-1]
+			self._ProgChordPointer = nextChord
+			self._ProgFingeringsPointers[self._ProgChordPointer] = pointer
+			self._ProgCentroid = centroid	
+			self._RootNoteName,self._RootNoteValue,_ = self._ProgChords[self._ProgChordPointer]	
 		
+		if nextFingering >= 0:
+			self._ProgFingeringsPointers[self._ProgChordPointer] = nextFingering
+			self._ProgCentroid = self._ProgFingerings[self._ProgChordPointer][nextFingering][-1]
+		self.updateFretboard()
+			
+	def onCentroidSwitch(self,switch):
+		self._ProgCentroidMode = switch.value
+
+			
 	def changeFilters(self,filters=None):
 		self._Filters = filters
-		self._Fingerings = self.calc_fingerings()
+		if self._Mode in ('C', 'S'):
+			self._Fingerings = self.calc_fingerings()
+		elif self._Mode == 'P':
+			pub.sendMessage('updateProgressionSettings')
 		self.updateFretboard()
 		
 	def changeSettings(self,settings=None):
@@ -625,6 +706,8 @@ class Model(object):
 		#%%%%%%%
 		mainViewShield.reveal()
 	
+	def handleProgressions(self):
+		pass
 		
 	def changeSpeed(self,**kwargs):
 		pass
@@ -681,17 +764,23 @@ class Model(object):
 				return type,waveDir
 		return 'generic',waveDir	
 		
-	def calc_fingerings(self):
-		'''calculate the fingerings and fretboard positions for the desired chord'''
-		if self._RootNoteName: # remember the note value of "C" is =
-			key = self._RootNoteValue
-			note = self._RootNoteName  # since "C" has a note value of zero, use note title as indicator
+	def calc_fingerings(self,chordtypeEntry=None):
+		'''calculate the fingerings and fretboard positions for the desired chord
+		if chordtypeEntry is passed, this is part of a progression '''
+		
+		if chordtypeEntry:
+			key,note,chordtype = chordtypeEntry
+			self._ChordNoteValues = chord.getNotesByName(chordtype)
 		else:
-			return None
-		if self._ChordName:
-			chordtype = self._ChordName
-		else:
-			return None
+			if self._RootNoteName: # remember the note value of "C" is =
+				key = self._RootNoteValue
+				note = self._RootNoteName  # since "C" has a note value of zero, use note title as indicator
+			else:
+				return None
+			if self._ChordName:
+				chordtype = self._ChordName
+			else:
+				return None
 		if self._InstrumentName:
 			tuning = self._InstrumentTuning
 			span = self._Span
@@ -1145,7 +1234,28 @@ class Model(object):
 			scaleNotes.append(thisString)
 		return scaleNotes
 		
+	def setProgressions(self,progFingerings=None, progChords=None):	
+		if not NoneOrNoneList(progFingerings):
+			self._ProgChordPointer = 0
+			self._ProgFingerings = progFingerings
+			self._ProgFingeringsPointers = [0 for x in range(len(progFingerings))]
+			self._ProgChords = progChords
+			self._ProgressionCentroidList = []
+			chordList = []
+			for entry in self._ProgFingerings:
+				fingeringList = []
+				for fingering in entry:
+					centroid = chordFingeringCentroid(fingering[2])
+					temp = [x for x in fingering]
+					temp.append(centroid)
+					fingeringList.append(temp)			
+				fingeringList = sorted(fingeringList,key=lambda  x:x[3])
+				chordList.append(fingeringList)
+			self._ProgFingerings = chordList #sorted by fingering centroids
+			self.updateFretboard()
 
+			
+				
 		
 #===============================
 				
@@ -1543,8 +1653,8 @@ class Instrument(TVTools,object):
 		self.items = items
 		self._current = None
 		self.is5StringBanjo = False
-		self.editing = False
 		self.delegator = mainView['tableview_inst_tune']
+		self.editing = False
 		self.currentNumLines = len(self.items)
 		self.waveDir = "default"
 		self.waveType = 'wav'
@@ -1562,15 +1672,17 @@ class Instrument(TVTools,object):
 		return self._current
 		
 	def onEdit(self,button):
-		if self.delegator.editing:
+		if self.editing:
+			self.editing = False
 			self.delegator.editing = False
 			self.delegator.reload_data()
 		else:
+			self.editing = True
 			self.delegator.editing = True
 			self.tuning = {}
 			for item in self.items:
 				item['accessory_type'] = 'none'
-				
+								
 	def reset(self):
 		for item in self.items:
 			item['accessory_type'] = 'none'			
@@ -1637,11 +1749,11 @@ class Instrument(TVTools,object):
 		
 	def tableview_can_delete(self, tableview, section, row):
 		# Return True if the user should be able to delete the given row.
-		return True
+		return self.editing
 		
 	def tableview_can_move(self, tableview, section, row):
 		# Return True if a reordering control should be shown for the given row (in editing mode).
-		return True
+		return self.editing
 		
 	def tableview_delete(self, tableview, section, row):
 		# Called when the user confirms deletion of the given row.
@@ -1730,7 +1842,13 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 						chordNoteValues=None,
 						rootNoteValue=None, 
 						scale=None,
-						capos=None):
+						capos=None,
+						progFingeringsPointers = None,
+						progChordPointer = None,
+						progFingerings = None,
+						progChordInfo = None,
+						progCentroid = None):
+														
 		self.fingerings = fingerings
 		self.fingeringPointer = fingeringPointer
 		self._scale_notes = scaleNotes
@@ -1748,6 +1866,11 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		self.capos=capos
 		self.twoOctaveScale = twoOctaveScale
 		self.findScaleNotes = self.ChordScale if mode == "I" else None
+		self.progFingeringsPointers = progFingeringsPointers
+		self.cChordPointer = progChordPointer
+		self.cFingerings = progFingerings
+		self.cChordInfo = progChordInfo
+		self.cCentroid = progCentroid
 		
 		try:
 			self.scaleType = scale
@@ -1828,20 +1951,37 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 				drawCapo(self,fret)
 		if self.tuning:
 			capoOffsets = model.capoOffsets()
-			if self.fingerings and self.cc_mode == 'C':
+			if (self.fingerings and self.cc_mode == 'C') or (self.cc_mode == 'P' and self.cFingerings):
+				isProgression = self.cc_mode == 'P'
 				# if there are some, draw current fingering or chord tone frets
 				if not self.showChordScale:
-					self._numChordsTextView.text = "{}".format(len(self.fingerings))
-					self._chordNumTextView.text = "{}".format(int(self.fingeringPointer+1))
+					if not isProgression:
+						numChord = len(self.fingerings) 
+						chordNum = int(self.fingeringPointer+1)
+					else:
+						Fingerings = self.cFingerings[self.cChordPointer]
+						if not Fingerings:
+							return
+						fPointer = self.progFingeringsPointers[self.cChordPointer]		
+						numChord = len(Fingerings)
+						chordNum = int(fPointer+1)
+					self._numChordsTextView.text = "{}".format(numChord)
+					self._chordNumTextView.text = "{}".format(chordNum)
 					middle_field.text = 'of'
-					fingering,chordTones,fretPositions = self.fingerings[self.fingeringPointer]
+					if isProgression:
+						fingering,chordTones,fretPositions,centroid = self.cFingerings[self.cChordPointer][fPointer] 
+					else:	
+						fingering,chordTones,fretPositions = self.fingerings[self.fingeringPointer]
 					ui.set_color('red')
 					for i,string in enumerate(fingering):
 						x,y,chordtone,nutmarker = string
 						if i == 0 and instrument.is5StringBanjo:
 							if fretPositions[i] == -1:
 								y = (self.fretDistance(self.scale(),self.fret5thStringBanjo)+self.fretDistance(self.scale(),self.fret5thStringBanjo-1))/2
+						#a = fretPositions[i]
+						#b = capoOffsets[i]
 						try:
+
 							if fretPositions[i] == capoOffsets[i]:
 								nutmarker = True
 						except:
@@ -2002,7 +2142,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 						self.chordtone_color(string,fret)
 						marker= PathCenteredCircle(x,y,model.fretboard_FingerRadius + 10)
 						marker.line_width = 3
-						marker.stroke()
+						marker.stroke()				
 			else:
 				pass
 				
@@ -2170,7 +2310,37 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 			else:
 				# switch display to chord tones
 				pub.sendMessage('toggleshowchordscaleview')
-			
+		elif self.cc_mode == 'P':
+			theseFingerings = model._ProgFingerings[model._ProgChordPointer]
+			if abs(DeltaY) > 30 and abs(DeltaY) > abs(DeltaX): #  vertical sweep
+				_,_,_,yrange = self.frame
+				fraction = DeltaY/yrange
+				try:
+					increment = math.floor(fraction*len(theseFingerings)*0.5)
+				except TypeError:
+					return
+				current = model._ProgFingeringsPointers[model._ProgChordPointer]
+				current += increment
+				current = max(0,current)
+				current = min(len(theseFingerings)-1,current) 
+				pub.sendMessage('updateprogressionpointers',
+								nextChord=-1,nextFingering=current)
+			elif self.wasLongTouch: #jump to this fret
+				x,y = touch.location
+				fret = self.closest(y,self.fretY)
+				for i,fingering in enumerate(theseFingerings):
+					_,_,frets,_ = fingering
+					testVector =  sorted([x for x in frets if x > 0])
+					if fret - 2 <= testVector[0] <= fret + 2:
+						break
+				if i < len(theseFingerings) - 1:
+					current = i 
+				else:
+					current =  model._ProgFingeringsPointers[model._ProgChordPointer]		
+				pub.sendMessage('updateprogressionpointers',
+								nextChord=-1,nextFingering=current)
+
+
 			
 			
 #####################################
@@ -2270,6 +2440,12 @@ class Chord(TVTools,object):
 	def reset(self):
 		for item in self.items:
 			item['accessory_type'] = 'none'
+			
+	def getNotesByName(self,chordName):
+		for item in self.items:
+			if item['title'] == chordName:
+				return item['fingering']
+		return None
 			
 # action for select
 
@@ -2758,19 +2934,30 @@ def parseChordName(chordstr):
 # previous/next chord form
 
 def onPrevNext(button):
-	if model._Fingerings:
-		cn = model._FingeringPointer
-		nc = len(model._Fingerings)
-		if button.name == 'button_down':
-			if cn < nc-1:
-				cn +=1
-		else:
-			cn -= 1
-			if cn < 0:
-				cn = 0
-		pub.sendMessage('changefingering',pointer=cn)
-		
-		
+	if model._Mode in ('C','P'):
+		if model._Mode == 'C':
+			pointer =  model._FingeringPointer
+			fingerings = model._Fingerings
+		else: # 'P'
+			pointer = model._ProgFingeringsPointers[model._ProgChordPointer]
+			fingerings = model._ProgFingerings[model._ProgChordPointer]
+		if fingerings:
+			cn = pointer
+			nc = len(fingerings)
+			if button.name == 'button_down':
+				if cn < nc-1:
+					cn +=1
+			else:# 'button_up'
+				cn -= 1
+				if cn < 0:
+					cn = 0
+		if model._Mode == 'C':
+			pub.sendMessage('changefingering',pointer=cn)
+
+		else: # 'P'	
+			pub.sendMessage('updateprogressionpointers',
+								nextChord=-1,nextFingering=cn)
+										
 ###################################################
 # play arpeggio
 
@@ -2786,13 +2973,18 @@ def play(button):
 		else:
 			baseOctave = model._InstrumentOctave
 		strings = model._InstrumentTuning
-		if model._Mode == 'C':
+		if model._Mode in ('C','P'):
 			try:
-				cc = model._Fingerings[model._FingeringPointer]
+				if model._Mode == 'C':
+					cc = model._Fingerings[model._FingeringPointer]
+				else: # 'P'
+					thisFingering = model._ProgFingeringsPointers[model._ProgChordPointer]
+					cc = model._ProgFingerings[model._ProgChordPointer][thisFingering]
 			except TypeError: # no chords yet
 				return
 			except IndexError: #oops
 				return
+	
 			frets = cc[2]
 			dead_notes = [item[3] == 'X' for item in cc[0]]
 			tones = []
@@ -2851,22 +3043,34 @@ def toggle_mode(sender,row):
 	capos.reset()
 	
 	newmode = sender.current['tag']
-	hideshow = {'I':  {'hide':
-	'tableview_root tableview_type tableview_scale label1 button_scale_notes button_scale_tones chord_num label_middle button_play_scale num_chords lbl_chord lbl_fullchord lbl_definition btn_sharpFlat sp_span lbl_span tri_chord_label  button_up button_down'.split(),
-	'show':
+	hideshow = {
+	'I': 
+		 {
+		     'hide':
+	'tableview_root tableview_type tableview_scale label1 button_scale_notes button_scale_tones chord_num label_middle button_play_scale num_chords lbl_chord lbl_fullchord lbl_definition btn_sharpFlat sp_span lbl_span tri_chord_label  button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid'.split(),
+			'show':
 	('tableview_find', 'button_find', 'button_chord', 'button_arp', 'fretboard')
 	},
-	'C':    {'hide':
-	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat'.split(),
-	'show': 'tableview_root tableview_type label1 chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down label1 fretboard'.split()
+	'C':    
+		{
+			'hide':
+	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_prog tableview_prog_display label_centroid switch_centroid'.split(),
+			'show': 
+	'tableview_root tableview_type label1 chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down label1 fretboard'.split()
 	},
-	'S':    {'hide':
-	'tableview_type tableview_find button_find chord_num num_chords label_middle button_chord button_arp lbl_chord lbl_fullchord lbl_definition sp_span lbl_span button_up button_down'.split(),
-	'show': 'tableview_scale tableview_root button_scale_tones button_scale_notes button_play_scale btn_sharpFlat tri_chord_label label1 fretboard'.split(),
+	'S':   
+		 {
+		 	'hide':
+	'tableview_type tableview_find button_find chord_num num_chords label_middle button_chord button_arp lbl_chord lbl_fullchord lbl_definition sp_span lbl_span button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid'.split(),
+			'show': 
+	'tableview_scale tableview_root button_scale_tones button_scale_notes button_play_scale btn_sharpFlat tri_chord_label label1 fretboard'.split(),
 	},
-	'P':    {'hide':
-	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_type tableview_root label1 fretboard'.split(),
-	'show': 'chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down'.split()
+	'P':    
+		{
+			'hide':
+	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_type label1 tableview_type'.split(),
+			'show': 
+	'chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down tableview_prog tableview_root fretboard tableview_prog_display label_centroid switch_centroid'.split()
 	},
 	}
 	pub.sendMessage('changemode',mode=newmode)
@@ -2895,6 +3099,9 @@ def toggle_mode(sender,row):
 		fretboard.findScaleNotes = []
 		find.row = -1
 		fretboard.touched = {}
+	elif newmode == 'P':
+		mainView['tableview_prog_display'].hidden = True
+		mainView['button_edit_chord'].title = 'progr'
 	fretboard.set_needs_display()
 	mainView.set_needs_display()
 	
@@ -3329,60 +3536,31 @@ def doScaleChange(sender,row):
 #---##########################################
 
 
-class Progr(TVTools,object):
-	''' create sets of chords that are relevant to current filtering for the designated progression '''
-	global curentState
-	def __init__(self):
-		self.items = [{'title':x['title'], 'chords':x['chords'], 'accessory_type':'none'}
-																															for x in ccc['PROGRESSION']]
-		#self.delegator = panelView('tableview_prog')
-		self._progChords = []
-		self._progFingerings = []
+class ProgDisplay(TVTools,object):
+	'''  '''
+	def __init__(self,delegator):
+		self.items = [{'title':'', 'accessory_type': 'none'}]
+		self._Delegator = delegator
+		pub.subscribe(self.updateProgressionList,'setprogressiondata')
 		
-	def onEdit(self,button):
-		if self.delegator.editing:
-			self.delegator.editing = False
-			self.delegator.reload_data()
-		else:
-			self.delegator.editing = True
-			self._progChords = []
-			
-			for item in self.items:
-				item['accessory_type'] = 'none'
-				
-				
 	def reset(self):
 		for item in self.items:
 			item['accessory_type'] = 'none'
 			
-	def createProgressionFingerings(self):
-		self._progFingerings= []
-		for chord in self._progChords:
-			self._progFingerings.append(calc_fingerings(chordtypeEntry=chord))
-			
-	def getProgressionChords(self,row):
-		key = root.root
-		keyNoteValue = root.noteValue
-		self._progChords = []
-		if key:
-			for chord in self.items[row]['chords']:
-				offset,type = chord.split('-')
-				realNote = (int(offset)+keyNoteValue) % 12
-				self._progChords.append((ccc['NOTE_NAMES'][realNote],realNote,type))
-				
-# action for select
+	def updateProgressionList(self,progFingerings=None, progChords=None):	
+		self.items = [{'title':(x[0]+x[2]), 'accessory_type':'none'} for x in progChords]
+		rowHeight = self._Delegator.row_height
+		self._Delegator.height = len(self.items)*rowHeight
+		self._Delegator.reload_data()
 
-	def tableview_did_select(self,tableView,section,row):   #progression
+	def tableview_did_select(self,tableView,section,row):  
 		self.setTableViewItemsRow(row)
-		self._prog = self.getProgressionChords(row)
 		tableView.reload_data()
-		self.current = {'title': self.items[row]['title'], 'chords': self.items[row]['chords'], 'row':row}
-		
-		self.createProgressionFingerings()
-		
-		
-		
-		
+		time.sleep(0.1)
+		print(self.items[row])
+		pub.sendMessage('updateprogressionpointers',
+								nextChord=row,nextFingering=-1)
+						
 	def tableview_number_of_sections(self, tableview):
 		# Return the number of sections (defaults to 1)
 		return 1
@@ -3424,6 +3602,143 @@ class Progr(TVTools,object):
 	def prog(self,value):
 		self._prog = value
 		
+class Progr(TVTools,object):
+	''' create sets of chords that are relevant to current filtering for the designated progression '''
+	def __init__(self,delegator):
+		self.items = [{'title':x['title'], 'chords':x['chords'], 'accessory_type':'none'} 
+						for x in ccc['PROGRESSIONS']]
+		self.items.insert(0,{'title':'choose prog','accessory_type':'none'})
+		self._progChords = []
+		self._progFingerings = []
+		self._isExpanded = False
+		self._Delegator = delegator
+		self._expanded = None
+		self._contracted  = None
+		pub.subscribe(self.updateProgressionSettings, 'updateProgressionSettings')
+
+	def setFrameConstants(self):
+		x,y,width,height = self._Delegator.frame
+		row_height = self._Delegator.row_height
+		self._expanded = (x,y,500,row_height*len(self.items))
+		self._contracted = (x,y,100,row_height)
+		#self._Delegator.frame = self._contracted
+
+		
+	def expand(self):
+		self._Delegator.frame = self._expanded
+		self._isExpanded = True
+		
+	def contract(self):
+		self._delegator.frame = self._contracted
+		self._isExpanded = False
+		
+		
+	def onEdit(self,button):
+		if self.delegator.editing:
+			self.delegator.editing = False
+			self.delegator.reload_data()
+		else:
+			self.delegator.editing = True
+			self._progChords = []
+			
+			for item in self.items:
+				item['accessory_type'] = 'none'
+								
+	def reset(self):
+		for item in self.items:
+			item['accessory_type'] = 'none'
+			
+	def updateProgressionSettings(self):
+		self._progFingerings = []
+		self.setTableViewItemsRow(1)
+		self.getProgressionChords(1) # row 0 is the "expand" request
+		for chord in self._progChords:
+			self._progFingerings.append(model.calc_fingerings(chordtypeEntry=chord))
+		pub.sendMessage('setprogressiondata', 
+						progFingerings=self._progFingerings, progChords=self._progChords)
+		
+			
+	def createProgressionFingerings(self):
+		self._progFingerings= []
+		for chord in self._progChords:
+			self._progFingerings.append(model.calc_fingerings(chordtypeEntry=chord))
+
+		
+	def getProgressionChords(self,row):
+		key = model._RootNoteName
+		keyNoteValue = model._RootNoteValue
+		self._progChords = []
+		if key:
+			for chord in self.items[row]['chords']:
+				offset,type = chord.split('-')
+				realNote = (int(offset)+keyNoteValue) % 12
+				self._progChords.append((ccc['NOTE_NAMES'][realNote],realNote,type))
+
+	def tableview_did_select(self,tableView,section,row):  
+		if not model._InstrumentTuning:
+			return
+		if not model._RootNoteValue:
+			return
+		def animationExpand():
+			tableView.frame = self._expanded
+		def animationContract():
+			tableView.frame = self._contracted
+		ui.animate(animationExpand, duration=0.1)
+		def doContract():
+			ui.animate(animationContract, duration=0.1)
+		if row == 0:
+			self.expand()
+			mainView['tableview_prog_display'].hidden = True
+		else:
+			self.setTableViewItemsRow(row)
+			self._prog = self.getProgressionChords(row)
+			tableView.reload_data()
+			ui.delay(doContract,0.1)		
+			mainView['tableview_prog_display'].hidden = False
+			self.createProgressionFingerings()
+			pub.sendMessage('setprogressiondata', 
+						progFingerings=self._progFingerings, progChords=self._progChords)
+						
+	def tableview_number_of_sections(self, tableview):
+		# Return the number of sections (defaults to 1)
+		return 1
+		
+	def tableview_number_of_rows(self, tableview, section):
+		# Return the number of rows in the section
+		return len(self.items)
+		
+	def tableview_cell_for_row(self, tableview, section, row):
+		# Create and return a cell for the given section/row
+		cell = ui.TableViewCell()
+		cell.text_label.text = self.items[row]['title']
+		cell.accessory_type = self.items[row]['accessory_type']
+		return cell
+		
+	def tableview_can_delete(self, tableview, section, row):
+		# Return True if the user should be able to delete the given row.
+		return False
+		
+	def tableview_can_move(self, tableview, section, row):
+		# Return True if a reordering control should be shown for the given row (in editing mode).
+		return True
+		
+	def tableview_delete(self, tableview, section, row):
+		# Called when the user confirms deletion of the given row.
+		self.currentNumLines -=1 # see above regarding hte "syncing"
+		self.delegator.delete_rows((row,)) # this animates the deletion  could also 'tableview.reload_data()'
+		del self.items[row]
+		
+	def tableview_move_row(self, tableview, from_section, from_row, to_section, to_row):
+		# Called when the user moves a row with the reordering control (in editing mode).
+		self.items = listShuffle(self.items,from_row,to_row)
+		
+	@property
+	def prog(self):
+		return self._prog
+		
+	@prog.setter
+	def prog(self,value):
+		self._prog = value
 #--- MAIN PROGRAM 
 
 if __name__ == "__main__":
@@ -3543,14 +3858,13 @@ if __name__ == "__main__":
 	mainView.add_subview(spanSpinner)
 	spanSpinner.position =(580,443)		
 	
-
+	
 	def syncSpanSpinner(span=None):
 		global spanSpinner
 		if span:
 			spanSpinner.value = span
 			spanSpinner.limits  = (1,span+2)
 	pub.subscribe(syncSpanSpinner,'syncspanspinner')
-	progr = Progr()
 	mainView['view_fretEnter'].hidden = True
 	mainView['sp_span'].hidden = True
 	mainView['button_save_config'].action = ccc.onConfigMain
@@ -3575,5 +3889,21 @@ if __name__ == "__main__":
 							)
 
 	mainView.add_subview(modeDropDown)
+	
+	tvProgs = mainView['tableview_prog']
+	tvProgs.hidden = True
+	progs = Progr(delegator=tvProgs)
+	tvProgs.data_source = tvProgs.delegate = progs
+	progs.setFrameConstants()
+	
+	tvProgDisplay = mainView['tableview_prog_display']
+	progDisplay = ProgDisplay(tvProgDisplay)
+	tvProgDisplay.data_source = tvProgDisplay.delegate = progDisplay
+	tvProgDisplay.scroll_enabled = False
+	
+	progCentroidSwitch = mainView['switch_centroid']
+	progCentroidSwitch.action = model.onCentroidSwitch
+	pub.sendMessage('centroidswitch',switch=progCentroidSwitch.value)
+	
 	toggle_mode(modeDropDown,0) # default to calc
 	mainView.present(style='full_screen',orientations=('landscape',))

@@ -1,4 +1,5 @@
-	
+import math
+
 def listShuffle(list,row_from, row_to):
 	''' a method to re-order a list '''
 	from_item = list[row_from]
@@ -15,6 +16,16 @@ def rotate(list,index):
 	outlist = [list[x] for x in range(pointer,len(list))] + [list[x] for x in range(0,pointer)] 
 	return  outlist if index else list
 	
+def NoneOrNoneList(object):
+	''' test if an object is a None or a list of None '''
+	if type(object) == type(None):
+		return True
+	if type(object) == type([]):
+		for item in object:
+			if type(item) != type(None):
+				return False
+		return True
+		
 def uniqify(sequence, idfun=None):
 	''' return a unique, order preserved version in input list'''
 	if not idfun:
@@ -47,6 +58,18 @@ def isInChord(key, chordtype, note):
 		if note == chordnote:
 			return True
 	return False
+	
+def chordFingeringCentroid(fingering):
+	''' determine the "average" fret of a fingering 
+	    ignore open or unplayed notes '''
+	sum = 0
+	count = 0
+	for string in fingering:
+		if string >= 0:
+			sum += string
+			count += 1
+	return sum/count
+			
 	
 	
 import ui

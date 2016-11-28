@@ -15,14 +15,14 @@
           "flex" : "WH",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
-          "data_source_delete_enabled" : true,
+          "name" : "tableview_scale",
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "data_source_number_of_lines" : 1,
-          "uuid" : "AC93143A-DA27-4C2B-8DB5-184B6CE51D41",
-          "data_source_font_size" : 18,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "row_height" : 36,
-          "name" : "tableview_scale"
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "uuid" : "AC93143A-DA27-4C2B-8DB5-184B6CE51D41",
+          "row_height" : 36
         }
       },
       {
@@ -36,18 +36,18 @@
           "flex" : "WH",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
-          "data_source_delete_enabled" : true,
+          "name" : "tableview_find",
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "data_source_number_of_lines" : 1,
-          "uuid" : "4E2A645B-4997-458A-92C9-BEFE4A4065C8",
-          "data_source_font_size" : 18,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "row_height" : 44,
-          "name" : "tableview_find"
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "uuid" : "4E2A645B-4997-458A-92C9-BEFE4A4065C8",
+          "row_height" : 44
         }
       },
       {
-        "selected" : false,
+        "selected" : true,
         "frame" : "{{15, 78}, {97, 655}}",
         "class" : "TableView",
         "nodes" : [
@@ -57,18 +57,18 @@
           "flex" : "LRTB",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
-          "data_source_delete_enabled" : true,
+          "name" : "tableview_root",
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "data_source_number_of_lines" : 1,
-          "uuid" : "F7A02DDC-101B-4ADA-89CF-79DC28BB7078",
-          "data_source_font_size" : 18,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "row_height" : 36,
-          "name" : "tableview_root"
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 14,
+          "uuid" : "F7A02DDC-101B-4ADA-89CF-79DC28BB7078",
+          "row_height" : 36
         }
       },
       {
-        "selected" : true,
+        "selected" : false,
         "frame" : "{{128, 46}, {119, 655}}",
         "class" : "TableView",
         "nodes" : [
@@ -78,14 +78,14 @@
           "flex" : "WH",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
-          "data_source_delete_enabled" : true,
+          "name" : "tableview_type",
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "data_source_number_of_lines" : 1,
-          "uuid" : "6F4AF45A-CA92-4F1F-9FA7-FDB7C2B5D4C6",
-          "data_source_font_size" : 18,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "row_height" : 36,
-          "name" : "tableview_type"
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "uuid" : "6F4AF45A-CA92-4F1F-9FA7-FDB7C2B5D4C6",
+          "row_height" : 36
         }
       },
       {
@@ -103,8 +103,8 @@
           "text" : "root",
           "alignment" : "center",
           "uuid" : "60905E0F-77F0-4119-AB93-3929F4A460C0",
-          "name" : "label1",
-          "font_size" : 17
+          "font_size" : 17,
+          "name" : "label1"
         }
       },
       {
@@ -122,8 +122,8 @@
           "uuid" : "3F4F33C9-F875-4AE5-9316-FE32B2A791FA",
           "font_bold" : false,
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "name" : "button_down",
-          "font_size" : 15
+          "font_size" : 15,
+          "name" : "button_down"
         }
       },
       {
@@ -141,8 +141,8 @@
           "uuid" : "B1723CE9-9B01-446F-9FD0-40171916DC72",
           "font_bold" : false,
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "name" : "button_up",
-          "font_size" : 15
+          "font_size" : 15,
+          "name" : "button_up"
         }
       },
       {
@@ -153,17 +153,18 @@
 
         ],
         "attributes" : {
+          "uuid" : "DAF1AEC7-D230-4FD8-AFF3-57D088D246B7",
           "flex" : "WH",
+          "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
-          "enabled" : true,
-          "data_source_delete_enabled" : false,
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
-          "uuid" : "DAF1AEC7-D230-4FD8-AFF3-57D088D246B7",
+          "enabled" : true,
+          "data_source_delete_enabled" : false,
           "data_source_font_size" : 18,
-          "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
           "row_height" : 25,
-          "name" : "tableview_inst_tune"
+          "name" : "tableview_inst_tune",
+          "editing" : false
         }
       },
       {
@@ -181,8 +182,8 @@
           "text" : "instrument - tuning",
           "alignment" : "center",
           "uuid" : "4440F2A0-B568-462E-87C8-0675E627CD7F",
-          "name" : "label2",
-          "font_size" : 17
+          "font_size" : 17,
+          "name" : "label2"
         }
       },
       {
@@ -252,8 +253,8 @@
           "text" : "",
           "alignment" : "center",
           "uuid" : "F398B686-823C-453F-9A5D-9C1ECBA865FB",
-          "name" : "chord_num",
-          "font_size" : 17
+          "font_size" : 17,
+          "name" : "chord_num"
         }
       },
       {
@@ -271,8 +272,8 @@
           "text" : "",
           "alignment" : "center",
           "uuid" : "11DAE33A-D850-4F02-8F03-223A7DDEAC04",
-          "name" : "label_middle",
-          "font_size" : 17
+          "font_size" : 17,
+          "name" : "label_middle"
         }
       },
       {
@@ -290,8 +291,8 @@
           "text" : "",
           "alignment" : "center",
           "uuid" : "FF580E30-45D5-4587-A093-92EB72D0B138",
-          "name" : "num_chords",
-          "font_size" : 17
+          "font_size" : 17,
+          "name" : "num_chords"
         }
       },
       {
@@ -305,14 +306,14 @@
           "flex" : "WH",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
-          "data_source_delete_enabled" : true,
+          "name" : "tableview_filters",
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "data_source_number_of_lines" : 1,
-          "uuid" : "2007CDE8-695A-4082-A64E-94FAAA6E8427",
-          "data_source_font_size" : 18,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "row_height" : 25,
-          "name" : "tableview_filters"
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "uuid" : "2007CDE8-695A-4082-A64E-94FAAA6E8427",
+          "row_height" : 25
         }
       },
       {
@@ -461,8 +462,8 @@
           "text" : "",
           "alignment" : "center",
           "uuid" : "F1632C14-ED5E-4773-B2B8-C60E326155DC",
-          "name" : "lbl_chord",
-          "font_size" : 22
+          "font_size" : 22,
+          "name" : "lbl_chord"
         }
       },
       {
@@ -482,8 +483,8 @@
           "alignment" : "center",
           "corner_radius" : 3,
           "uuid" : "381B320B-A06E-473D-BAAF-48F201AA08E2",
-          "name" : "lbl_fullchord",
-          "font_size" : 16
+          "font_size" : 16,
+          "name" : "lbl_fullchord"
         }
       },
       {
@@ -503,8 +504,8 @@
           "alignment" : "center",
           "corner_radius" : 3,
           "uuid" : "654B5F60-AA1A-480B-ADC8-B772300E9E42",
-          "name" : "lbl_definition",
-          "font_size" : 16
+          "font_size" : 16,
+          "name" : "lbl_definition"
         }
       },
       {
@@ -538,14 +539,14 @@
           "flex" : "WH",
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
-          "data_source_delete_enabled" : true,
+          "name" : "tableview_capos",
           "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
-          "data_source_number_of_lines" : 1,
-          "uuid" : "CC48937E-8935-4F43-AC89-7C79F16A3E24",
-          "data_source_font_size" : 18,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "row_height" : 25,
-          "name" : "tableview_capos"
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "uuid" : "CC48937E-8935-4F43-AC89-7C79F16A3E24",
+          "row_height" : 25
         }
       },
       {
@@ -569,8 +570,8 @@
               "text" : "Enter Fret Number",
               "alignment" : "center",
               "uuid" : "811F462B-5E47-4062-AC0D-CEAC127717A9",
-              "name" : "label1",
-              "font_size" : 16
+              "font_size" : 16,
+              "name" : "label1"
             }
           },
           {
@@ -639,8 +640,8 @@
           "text" : "Span",
           "alignment" : "center",
           "uuid" : "29E630D3-8A5A-40C5-8B87-D6AFC555DCE1",
-          "name" : "lbl_span",
-          "font_size" : 17
+          "font_size" : 17,
+          "name" : "lbl_span"
         }
       },
       {
@@ -658,8 +659,8 @@
           "text" : "Volume",
           "alignment" : "center",
           "uuid" : "C7F12027-5EF5-4ADB-9230-BBE5C75D5DF6",
-          "name" : "label6",
-          "font_size" : 13
+          "font_size" : 13,
+          "name" : "label6"
         }
       },
       {
@@ -677,8 +678,8 @@
           "text" : "speed",
           "alignment" : "center",
           "uuid" : "3EF4252F-23BB-4CB6-A9B9-976ECB012F69",
-          "name" : "label7",
-          "font_size" : 14
+          "font_size" : 14,
+          "name" : "label7"
         }
       },
       {
@@ -996,8 +997,8 @@
               "text" : "Instrument Editor",
               "alignment" : "center",
               "uuid" : "C163DA4D-34AF-433A-8E46-7DA238F04A9A",
-              "name" : "label1",
-              "font_size" : 17
+              "font_size" : 17,
+              "name" : "label1"
             }
           },
           {
@@ -1015,8 +1016,8 @@
               "uuid" : "4A35C2B8-1C0B-470A-B502-374B05CDB7F9",
               "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
               "alignment" : "left",
-              "name" : "txt_title",
-              "font_size" : 17
+              "font_size" : 17,
+              "name" : "txt_title"
             }
           },
           {
@@ -1077,8 +1078,8 @@
               "alignment" : "center",
               "background_color" : "RGBA(1.000000,1.000000,0.882353,1.000000)",
               "uuid" : "45176376-6805-461C-9DDE-8EEC55AAC085",
-              "name" : "label2",
-              "font_size" : 17
+              "font_size" : 17,
+              "name" : "label2"
             }
           },
           {
@@ -1179,8 +1180,8 @@
               "alignment" : "left",
               "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
               "uuid" : "08D7613F-ED06-4ACF-8960-8CA50849472A",
-              "name" : "label1",
-              "font_size" : 17
+              "font_size" : 17,
+              "name" : "label1"
             }
           },
           {
@@ -1276,18 +1277,97 @@
           "alignment" : "center",
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
           "uuid" : "3DF9C964-4E0C-413D-9BA1-1FDE661BC338",
-          "name" : "tri_chord_label",
-          "font_size" : 16
+          "font_size" : 16,
+          "name" : "tri_chord_label"
+        }
+      },
+      {
+        "selected" : false,
+        "frame" : "{{128, 58}, {91, 72}}",
+        "class" : "TableView",
+        "nodes" : [
+
+        ],
+        "attributes" : {
+          "uuid" : "FC5A633E-5B15-4D6A-83A5-C0113B2DD1C8",
+          "background_color" : "RGBA(1.0, 1.0, 1.0, 1.0)",
+          "frame" : "{{395, 270}, {200, 200}}",
+          "data_source_items" : "Row 1\nRow 2\nRow 3",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
+          "data_source_number_of_lines" : 1,
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "row_height" : 36,
+          "class" : "TableView",
+          "name" : "tableview_prog",
+          "flex" : "WH"
+        }
+      },
+      {
+        "selected" : false,
+        "frame" : "{{128, 163}, {91, 291}}",
+        "class" : "TableView",
+        "nodes" : [
+
+        ],
+        "attributes" : {
+          "uuid" : "735CF6CA-79A8-4BE9-9B83-87F626336053",
+          "corner_radius" : 0,
+          "background_color" : "RGBA(1.0, 1.0, 1.0, 1.0)",
+          "frame" : "{{395, 270}, {200, 200}}",
+          "data_source_items" : "Row 1\nRow 2\nRow 3",
+          "data_source_number_of_lines" : 1,
+          "border_width" : 1,
+          "border_color" : "RGBA(0.021226,0.021226,0.021226,1.000000)",
+          "data_source_delete_enabled" : true,
+          "data_source_font_size" : 18,
+          "row_height" : 44,
+          "class" : "TableView",
+          "name" : "tableview_prog_display",
+          "flex" : "WH"
+        }
+      },
+      {
+        "selected" : false,
+        "frame" : "{{145, 485}, {51, 31}}",
+        "class" : "Switch",
+        "nodes" : [
+
+        ],
+        "attributes" : {
+          "frame" : "{{470, 354}, {51, 31}}",
+          "value" : true,
+          "class" : "Switch",
+          "name" : "switch_centroid",
+          "uuid" : "3CCA39BF-22C3-42F5-A410-473C0BF775E5"
+        }
+      },
+      {
+        "selected" : false,
+        "frame" : "{{113, 540}, {119, 32}}",
+        "class" : "Label",
+        "nodes" : [
+
+        ],
+        "attributes" : {
+          "font_name" : "<System>",
+          "frame" : "{{420, 354}, {150, 32}}",
+          "uuid" : "0BCAB427-3BE8-4CA7-AC2F-4B4BD4AD1C4D",
+          "class" : "Label",
+          "alignment" : "center",
+          "text" : "lock fret centroid",
+          "name" : "label_centroid",
+          "font_size" : 12
         }
       }
     ],
     "attributes" : {
       "flex" : "",
       "enabled" : true,
+      "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
       "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-      "name" : "Chord Calc2",
       "tint_color" : "RGBA(0.000000,0.478000,1.000000,1.000000)",
-      "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)"
+      "name" : "Chord Calc2"
     }
   }
 ]

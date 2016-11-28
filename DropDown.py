@@ -108,7 +108,8 @@ class DropDown(ui.View):
 		self.add_subview(self.tv)
 		self.tv.frame = self.tvFrame
 		self.add_subview(self.button)
-		self.fullSize = fullSize
+		#self.fullSize = fullSize
+		self.fullSize = self.smallSize*len(self._data) 
 		self.smallSize = self.frame[3]
 		self.offset_eps = offset_eps
 		self.name = name
