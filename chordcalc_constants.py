@@ -391,7 +391,7 @@ CAPOS = [
         ]	
         
 PROGRESSIONS = [
-							{'title': 'I-V', 	'chords':['0-maj','7-min']},
+							{'title': 'I-V', 	'chords':['0-maj','7-maj']},
 							{'title': 'I-V7', 'chords':['0-maj', '7-7']},
 							{'title': 'I-IV-V', 'chords':['0-maj','5-maj','7-maj']},
 							{'title': 'I-IV-V7', 'chords':['0-maj','5-maj','7-7']},

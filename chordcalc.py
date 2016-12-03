@@ -49,9 +49,8 @@ if '.' not in sys.path: sys.path.append('.')
 
 #--- Main imports
 import os.path, re, ui, console, sound, time, math, json, importlib
-from operator import add,mul
+from operator import add
 import pubsub; importlib.reload(pubsub); from pubsub import pub
-from pubsub.core import TopicManager
 
 #delete all topics (need to do this in Pythonista)
 defaultPublisher = pub.getDefaultPublisher()
@@ -406,9 +405,11 @@ class Model(object):
 		pub.subscribe(self.setFindScale,'updatefindscale')
 		pub.subscribe(self.setCapoFret,'setcapofret')
 		pub.subscribe(self.changeSettings,'changesettings')
-		pub.subscribe(self.setProgressions,'setprogressiondata')
+		pub.subscribe(self.setProgressionData,'setprogressiondata')
 		pub.subscribe(self.updateProgressionPointers,'updateprogressionpointers')
 		pub.subscribe(self.updateCentroidSwitch,'centroidswitch')
+		pub.subscribe(self.setCentroid, 'setcentroid')
+		pub.subscribe(self.changeProgression,'changeprogression')
 
 			
 		######################################		
@@ -434,11 +435,16 @@ class Model(object):
 		if self._Mode in ('C', 'S'):
 			self._Fingerings = self.calc_fingerings()
 		elif self._Mode == 'P':
-			pub.sendMessage('updateProgressionSettings')
+			if not NoneOrNoneList(self._ProgChords):
+				pub.sendMessage('updateProgressionSettings')
 		if self._Mode == 'S':
 			self._TwoOctaveScale = []
 		self.updateFretboard()
+
 		
+	def changeProgression(self,chords=None):
+		pass
+												
 	def updateCentroidSwitch(self,switch=None):
 		self._ProgCentroidMode = switch
 
@@ -495,6 +501,7 @@ class Model(object):
 		self._ProgFingeringsPointers = None 
 		self._ProgChords = None 
 		self._ProgCentroid = None 
+		self._ProgCurrentRootValue = None
 
 		
 		pub.sendMessage('update.tuningbuttontext',text=self._InstrumentTuning)
@@ -508,6 +515,10 @@ class Model(object):
 		self.updateFretboard()
 
 	def updateFretboard(self):
+		thisChordFingering = None
+		thisChordPointer = None
+		thisChordNumberOfFingerings = None
+		thisChordInfo = None
 		if not self._InstrumentTuning:
 			return	
 		if self._Mode == 'C': # chord Finder
@@ -524,16 +535,16 @@ class Model(object):
 		elif self._Mode == 'P':
 			if not self._ProgFingeringsPointers:
 				return
-			elif not self._ProgFingerings:
+			if  self._ProgChordPointer == None:
 				return
-			elif not self._ProgChordPointer:
+			if not self._ProgFingerings:
 				return
-			else:
-				theseFingerings = self._ProgFingerings[self._ProgChordPointer]
-				thisPointer = self._ProgFingeringsPointers[self._ProgChordPointer]
-				self._ProgFingerings[self._ProgChordPointer] = self.calc_fingerings()
-				self._ProgCentroid = theseFingerings[thisPointer][-1]	
-				setChordSpelling(keyNoteValue=self._RootNoteValue, keyName=self._RootNoteName, 							chordNoteValues=self._ChordNoteValues)		
+			thisChordPointer = self._ProgFingeringsPointers[self._ProgChordPointer]
+			thisChordFingering = self._ProgFingerings[self._ProgChordPointer][thisChordPointer]
+			thisChordInfo = self._ProgChords[self._ProgChordPointer]
+			thisChordNumberOfFingerings = len(self._ProgFingerings[self._ProgChordPointer])
+			self._ProgCentroid = thisChordFingering[-1]	
+			setChordSpelling(keyNoteValue=self._RootNoteValue, keyName=self._RootNoteName, 							chordNoteValues=self._ChordNoteValues)		
 		pub.sendMessage('update.fretboard',	
 						mode=self._Mode, 
 						fingerings=self._Fingerings,
@@ -545,20 +556,22 @@ class Model(object):
 						tuning=self._InstrumentTuning,
 						type = self._InstrumentType,
 						is5StringBanjo = self._is5StringBanjo,
-						root = self._RootNoteName,
-						chordName=self._ChordName,
+						root = self._RootNoteValue,
+						rootName = self._RootNoteName,
+						chordName =self._ChordName,
 						chordNoteValues=self._ChordNoteValues,
 						rootNoteValue = self._RootNoteValue,
 						scale = self._ScaleNotes,
 						capos=self._Capos,
-						progFingeringsPointers = self._ProgFingeringsPointers,
-						progChordPointer = self._ProgChordPointer,
-						progFingerings = self._ProgFingerings,
-						progChordInfo = self._ProgChords,
+						progFingering = thisChordFingering,
+						progChordPointer = thisChordPointer,
+						progChordNumberOfFingerings = thisChordNumberOfFingerings,
+						progChordInfo = thisChordInfo,
 						progCentroid = self._ProgCentroid	
 						)
-						
-											
+		
+								
+																	
 	def updateMultiDisplays(self):
 		if self._Mode == 'C':
 			midText,lowText = self.getChordSpelling()
@@ -594,7 +607,7 @@ class Model(object):
 			keyName = self._RootName
 		except:
 			return
-		if not key:
+		if not keyName:
 			return
 		NameString = ''
 		ToneString = ''
@@ -628,34 +641,50 @@ class Model(object):
 			
 	def updateProgressionPointers(self,nextChord=None,nextFingering=None):
 		''' Change pointers to chords for fretboard viewing
-			nextChord = -1 (previous) 0 no change +1 next
-			nextFingering = -n (up neck) 0 (no change) +n (down neck
+			nextChord = -1 -> no change  +ve nextchord
+			nextFingering = -1 -> no change) +ve nextfingering
 		'''
+		currentChord = self._ProgChordPointer
+		currentFingeringPointer = self._ProgFingeringsPointers[currentChord]
+		currentFingering = self._ProgFingerings[currentChord][currentFingeringPointer]
+
 		if nextChord >= 0:
-			if self._ProgCentroidMode and self._ProgCentroid:
+			centroid = self._ProgCentroid #pre-load cyrrent centroid
+			pointer = currentFingeringPointer
+			if self._ProgCentroidMode:
 				found = False
-				for increment in (0.5, 1.0, 2.0, 3.0):
-					for i,fingering in enumerate(self._ProgFingerings[self._ProgChordPointer]):
+				self._ProgCentroid = currentFingering[-1]
+				for increment in (0.25, 0.5, 1.0, 2.0, 3.0):
+					for i,fingering in enumerate(self._ProgFingerings[nextChord]):
 						centroid = fingering[-1]
-						if abs(centroid - model._ProgCentroid) < increment:
+						if abs(centroid - self._ProgCentroid) < increment:
 							found = True
 							pointer = i
 							break
 					if found:
-						break
+						break	
+				self._ProgCentroid = centroid	
 			else:
-				pointer = self._ProgFingeringsPointers[self._ProgChordPointer]
-				centroid = self._ProgFingerings[self._ProgChordPointer][0][-1]
+				pointer = self._ProgFingeringsPointers[nextChord] # ignore centrodi
 			self._ProgChordPointer = nextChord
-			self._ProgFingeringsPointers[self._ProgChordPointer] = pointer
-			self._ProgCentroid = centroid	
+			self._ProgFingeringsPointers[nextChord] = pointer
 			self._RootNoteName,self._RootNoteValue,_ = self._ProgChords[self._ProgChordPointer]	
-		
-		if nextFingering >= 0:
-			self._ProgFingeringsPointers[self._ProgChordPointer] = nextFingering
-			self._ProgCentroid = self._ProgFingerings[self._ProgChordPointer][nextFingering][-1]
+		elif nextFingering >= 0:
+			self._ProgFingeringsPointers[currentChord] = nextFingering
+			self._ProgCentroid = self._ProgFingerings[currentChord][nextFingering][-1]
 		self.updateFretboard()
-			
+
+	def setCentroid(self,centroid=None):
+		self._ProgCentroid = centroid
+				
+	def setProgressionData(self,progFingerings=None, progChords=None):	
+		if not NoneOrNoneList(progFingerings):
+			self._ProgChordPointer = 0
+			self._ProgFingerings = progFingerings
+			self._ProgFingeringsPointers = [0 for x in range(len(progFingerings))]
+			self._ProgChords = progChords
+			self.updateFretboard()
+												
 	def onCentroidSwitch(self,switch):
 		self._ProgCentroidMode = switch.value
 
@@ -769,12 +798,13 @@ class Model(object):
 		if chordtypeEntry is passed, this is part of a progression '''
 		
 		if chordtypeEntry:
-			key,note,chordtype = chordtypeEntry
+			root,rootValue,chordtype = chordtypeEntry
+			self._ProgCurrentRootValue = rootValue
 			self._ChordNoteValues = chord.getNotesByName(chordtype)
 		else:
 			if self._RootNoteName: # remember the note value of "C" is =
-				key = self._RootNoteValue
-				note = self._RootNoteName  # since "C" has a note value of zero, use note title as indicator
+				rootValue = self._RootNoteValue
+				root = self._RootNoteName
 			else:
 				return None
 			if self._ChordName:
@@ -794,37 +824,38 @@ class Model(object):
 		fingerings = []
 		result = []
 		for position in range(0,fretboard.numFrets-span):
-			fingeringThisPosition = self.findFingerings(position)
+			fingeringThisPosition = self.findFingerings(position,rootValue)
 			if fingeringThisPosition:
 				fingerings = fingerings + fingeringThisPosition
 		fingerings = uniqify(fingerings,idfun=(lambda x: tuple(x)))
+		centroids = [chordFingeringCentroid(x) for x in fingerings]
 		if fingerings:
 			for fingering in fingerings:
-				fingerMarker = fretboard.fingeringDrawPositions(key,chordtype,tuning,fingering)
+				fingerMarker = fretboard.fingeringDrawPositions(rootValue,chordtype,tuning,fingering)
 				fingerPositions.append(fingerMarker)
-			for fingering,drawposition in zip(fingerings,fingerPositions):
+			for fingering,drawposition,centroid in zip(fingerings,fingerPositions,centroids):
 				chordTones = []
 				for entry in drawposition:
 					chordTones.append(entry[2])
-				result.append((drawposition,chordTones,fingering))
+				result.append((drawposition,chordTones,fingering,centroid))
 			if filters:
 				result = apply_filters(filterSet, result)
 				if result:
 					result = uniqify(result,idfun=(lambda x: tuple(x[2])))
 		self._FingeringPointer = 0 
-		return result
+		return sorted(result, key=(lambda x: x[3]))
 		
 		
-	def findFingerings(self,position):
+	def findFingerings(self,position,rootValue):
 		# Get valid frets on the strings
 		
-		validfrets = self.findValidFrets(position)
+		validfrets = self.findValidFrets(position,rootValue)
 		
 		# Find all candidates
 		candidates = self.findCandidates(validfrets)
 		
 		# Filter out the invalid candidates
-		candidates = self.filterCandidates(candidates)
+		candidates = self.filterCandidates(candidates,rootValue)
 		
 		return candidates
 		
@@ -832,7 +863,7 @@ class Model(object):
 	# Returns a list of valid frets for each string
 	# Open strings are included if valid
 	
-	def findValidFrets(self,position):	
+	def findValidFrets(self,position,rootValue):	
 		strings = []
 		nutOffsets = self.capoOffsets()
 		for i,string in enumerate(self._InstrumentTuning):
@@ -854,7 +885,7 @@ class Model(object):
 			for fret in searchrange:
 				for chordrelnote in self._ChordNoteValues:
 					note = (string + fret) % 12
-					chordnote = (self._RootNoteValue + chordrelnote) % 12
+					chordnote = (rootValue + chordrelnote) % 12
 					if note == chordnote:
 						frets.append(fret)
 			strings.append(frets)
@@ -913,7 +944,7 @@ class Model(object):
 	# Tests whether a fingering is valid
 	# Should allow various possibilities - full chord, no 5th, no 3rd, no root, etc
 	
-	def isValidChord(self,candidate):
+	def isValidChord(self,candidate,rootNoteValue):
 		filterSet = self._Filters
 		if not filterSet:
 			filterSet = []
@@ -925,8 +956,8 @@ class Model(object):
 		for chordrelnote in self._ChordNoteValues:
 			# assume chord notes are not present
 			present[chordrelnote] = False
-			chordnote = (self._RootNoteValue + chordrelnote) %12
-			for i, v in enumerate(candidate):
+			chordnote = (rootNoteValue + chordrelnote) %12
+			for i,_ in enumerate(candidate):
 				# ignore unplayed strings
 				if candidate[i] != -1:
 					note = (self._InstrumentTuning[i] + candidate[i]) % 12
@@ -963,23 +994,140 @@ class Model(object):
 	# Criteria for invalid chords may vary
 	# Returns the list of valid chords
 	
-	def filterCandidates(self,candidates):	
+	def filterCandidates(self,candidates,rootValue):	
 		if not candidates:
 			return None
 		newlist = []
 		for candidate in candidates:
-			if self.isValidChord(candidate):
+			if self.isValidChord(candidate,rootValue):
 				newlist += [candidate]
 		return newlist
+		
+
+	def getScaleNotes(self,fingering):
+		if self._Mode == 'P':
+			if self._ProgChords:
+				rootNoteValue = self._ProgCurrentRootValue
+			else:
+				return None
+		else:
+			rootNoteValue = self._RootNoteValue
+		scalenotes = []
+		for i, v in enumerate(fingering):
+			if v == -1:
+				scalenotes.append('X')
+			else:
+				#effTuning = self._InstrumentTuning[i]
+#				if self._is5StringBanjo and i == 0:
+#					effTuning = self._InstrumentTuning[i] - self.fretboard_fret5thStringBanjo
+				fingerednote = (self._InstrumentTuning[i] + fingering[i]) % 12
+
+				for chordrelnote in self._ChordNoteValues:
+					chordnote = ( rootNoteValue + chordrelnote) % 12
+					if fingerednote == chordnote:
+						scalenotes.append(ccc['SCALENOTES'][chordrelnote])
+		return scalenotes
+						
+
+	
+	def capoOffsets(self):
+		''' calculate and return the offsets due to the applied capos'''
+		numStrings = len(self._InstrumentTuning)
+		offsets = [0]*numStrings
+		if not self._is5StringBanjo:
+			for fret in self._Capos.keys():
+				mask = self._Capos[fret]
+				for i in range(numStrings):
+					value = fret if mask[i] else 0
+					offsets[i] = max(offsets[i],value)
+		else: # 5 string banjo
+			offsets = [self.fretboard_fret5thStringBanjo,0,0,0,0]
+			for fret in self._Capos.keys():
+				mask = self._Capos[fret]
+				if len(mask) == 1:
+				# is the fifth string
+					offsets[0] = max(offsets[0],fret)
+				else:
+					for i in range(1,5):
+						value = fret if mask[i] else 0
+						offsets[i] = max(offsets[i],value)
+		return offsets
+		
+
+		
+	def calc_chord_scale(self,pKey=None, pChord=None): #
+		_key = pKey if self._Mode == 'I' else self._RootNoteValue
+		if pChord:
+			_chord = pChord
+		elif self._Fingerings:
+			_chord = self._ChordNoteValues
+		else:
+			return None
+		# calculate notes in the current key
+		chordNotes = [(x + _key) % 12 for x in _chord]
+		capoOffsets = self.capoOffsets()
+		scale = []
+		for i,openString in enumerate(self._InstrumentTuning):
+			thisString = []
+			for fret in range(capoOffsets[i],self.fretboard_NumFrets+1): # zero is the open string
+				tone = (openString + fret) %12
+				if tone in chordNotes:
+					thisString.append((fret-1,(tone - _key)%12))
+			scale.append(thisString)
+		return scale
+		
+	def calc_scale_notes(self):
+		''' calculate the scale notes for the curent key, instrument and scale type'''
+		key = self._RootNoteValue
+		if self._ScaleName:
+			scaleintervals = self._ScaleIntervals
+		else:
+			return None
+		if self._InstrumentTuning:
+			tuning = self._InstrumentTuning
+		else:
+			return None
+		# format of the returned data is [[[fret, scalenote, scaletone, octave],.....numer on string
+		#                                                                         ] length = numStrings
+		# first unpack the scale spacing from the string
+		
+		capoOffsets = self.capoOffsets()
+		intervals = [0]
+		for letter in scaleintervals:
+			if letter == 'S':
+				intervals.append(1)
+			elif letter == 'T':
+				intervals.append(2)
+			else:
+				intervals.append((int(letter)))
+				
+		nextNote = key
+		notes = [nextNote]
+		for interval in intervals[1:]:
+			nextNote += interval
+			notes.append(nextNote % 12)
 			
-	def fingeringDrawPositions(self,fingering):
+		scaleNotes= []
+		for i,string in enumerate(tuning):
+			thisString = []
+			for fret in range(capoOffsets[i],self.fretboard_NumFrets+1):
+				note = (fret + string) % 12
+				if note in notes:
+					thisString.append((fret,note))
+			scaleNotes.append(thisString)
+		return scaleNotes
+		
+
+# fingering positions for drawing
+
+	def fingeringDrawPositions(self,key,chordtype,tuning,fingering):
 		""" given a fingering,chord and tuning information and virtual neck info,
 		return the center positions all markers.  X and open strings will be
 		marked at the nut"""
-		scaleNotes = self.getScaleNotes(key, chordtype, tuning, fingering)
+		scaleNotes = self.getScaleNotes(fingering)
 		#if len(scaleNotes) != len(fingering):
 		chordDrawPositions = []
-		numStrings,offset,ss = self.stringSpacing()
+		numStrings,offset,ss = fretboard.stringSpacing()
 		for i,fretPosition in enumerate(fingering): #loop over strings, low to high
 			try:
 				note = scaleNotes[i]
@@ -991,10 +1139,10 @@ class Model(object):
 				ypos = int(0.5* self.nutOffset)
 				atNut = 'X' if fretPosition else 'O'
 			else:
-				ypos = self.fretboardYPos(fretPosition)
+				ypos = fretboard.fretboardYPos(fretPosition)
 			chordDrawPositions.append((xpos,ypos,note,atNut))
 		return chordDrawPositions
-		
+					
 	def calc_two_octave_scale(self):
 		''' given a starting (string,scaletoneIndex) calculate a two octave scale across the 
 		strings
@@ -1044,7 +1192,7 @@ class Model(object):
 			
 		tonesOnStrings.append([-1 for x in range(len(tonesOnStrings[0]))])
 		
-		numNotes = 2*len(scaleintervals) + 1
+		#numNotes = 2*len(scaleintervals) + 1
 		numStrings = len(tuning)
 		thisString,thisStringFret = self.fretboard_location
 		
@@ -1058,11 +1206,11 @@ class Model(object):
 		try:
 			thisIndex = fretsOnStrings[thisString].index(thisStringFret)
 		except ValueError:
-			console.hud_alert('error, line793ish, see console')
+			console.hud_alert('error, lin 1201 ish, see console')
 			print (fretsOnStrings[thisString], thisStringFret)
 		scaleNotes = [self.fretboard_location]
 		thisStringCount = 1 if thisStringFret else 0
-		nextStringNote = scale_notes[thisString+1][1]
+		#nextStringNote = scale_notes[thisString+1][1]
 		nextIndex = 0
 		# always look to see if next note is on next string
 		for nextTone in tonesInTwoOctaveScale[1:]: # first tone already in place
@@ -1129,133 +1277,7 @@ class Model(object):
 						thisStringCount += 1
 					if mode == 'down':
 						referenceFret = fretsOnStrings[thisString][thisIndex]
-		return scaleNotes
-
-		
-	def capoOffsets(self):
-		''' calculate and return the offsets due to the applied capos'''
-		numStrings = len(self._InstrumentTuning)
-		offsets = [0]*numStrings
-		if not self._is5StringBanjo:
-			for fret in self._Capos.keys():
-				mask = self._Capos[fret]
-				for i in range(numStrings):
-					value = fret if mask[i] else 0
-					offsets[i] = max(offsets[i],value)
-		else: # 5 string banjo
-			offsets = [self.fretboard_fret5thStringBanjo,0,0,0,0]
-			for fret in self._Capos.keys():
-				mask = self._Capos[fret]
-				if len(mask) == 1:
-				# is the fifth string
-					offsets[0] = max(offsets[0],fret)
-				else:
-					for i in range(1,5):
-						value = fret if mask[i] else 0
-						offsets[i] = max(offsets[i],value)
-		return offsets
-		
-	def getScaleNotes(self,fingering):
-		scalenotes = []
-		for i, v in enumerate(fingering):
-			if v == -1:
-				scalenotes.append('X')
-			else:
-				effTuning = self._InstrumentTuning[i]
-				if self._is5StringBanjo and i == 0:
-					effTuning = self._InstrumentTuning[i] - self.fretboard_fret5thStringBanjo
-					
-				fingerednote = (self._InstrumentTuning[i] + fingering[i]) % 12
-				for chordrelnote in self._ChordNoteValues:
-					chordnote = (self._RootNoteValue + chordrelnote) % 12
-					if fingerednote == chordnote:
-						scalenotes.append(ccc['SCALENOTES'][chordrelnote])
-		return scalenotes
-		
-	def calc_chord_scale(self,pKey=None, pChord=None): #
-		_key = pKey if self._Mode == 'I' else self._RootNoteValue
-		if pChord:
-			_chord = pChord
-		elif self._Fingerings:
-			_chord = self._ChordNoteValues
-		else:
-			return None
-		# calculate notes in the current key
-		chordNotes = [(x + _key) % 12 for x in _chord]
-		capoOffsets = self.capoOffsets()
-		scale = []
-		for i,openString in enumerate(self._InstrumentTuning):
-			thisString = []
-			for fret in range(capoOffsets[i],self.fretboard_NumFrets+1): # zero is the open string
-				tone = (openString + fret) %12
-				if tone in chordNotes:
-					thisString.append((fret-1,(tone - _key)%12))
-			scale.append(thisString)
-		return scale
-		
-	def calc_scale_notes(self):
-		''' calculate the scale notes for the curent key, instrument and scale type'''
-		key = self._RootNoteValue
-		if self._ScaleName:
-			scaleintervals = self._ScaleIntervals
-		else:
-			return None
-		if self._InstrumentTuning:
-			tuning = self._InstrumentTuning
-		else:
-			return None
-		# format of the returned data is [[[fret, scalenote, scaletone, octave],.....numer on string
-		#                                                                         ] length = numStrings
-		# first unpack the scale spacing from the string
-		
-		capoOffsets = self.capoOffsets()
-		intervals = [0]
-		for letter in scaleintervals:
-			if letter == 'S':
-				intervals.append(1)
-			elif letter == 'T':
-				intervals.append(2)
-			else:
-				intervals.append((int(letter)))
-				
-		nextNote = key
-		notes = [nextNote]
-		for interval in intervals[1:]:
-			nextNote += interval
-			notes.append(nextNote % 12)
-			
-		scaleNotes= []
-		for i,string in enumerate(tuning):
-			thisString = []
-			for fret in range(capoOffsets[i],self.fretboard_NumFrets+1):
-				note = (fret + string) % 12
-				if note in notes:
-					thisString.append((fret,note))
-			scaleNotes.append(thisString)
-		return scaleNotes
-		
-	def setProgressions(self,progFingerings=None, progChords=None):	
-		if not NoneOrNoneList(progFingerings):
-			self._ProgChordPointer = 0
-			self._ProgFingerings = progFingerings
-			self._ProgFingeringsPointers = [0 for x in range(len(progFingerings))]
-			self._ProgChords = progChords
-			self._ProgressionCentroidList = []
-			chordList = []
-			for entry in self._ProgFingerings:
-				fingeringList = []
-				for fingering in entry:
-					centroid = chordFingeringCentroid(fingering[2])
-					temp = [x for x in fingering]
-					temp.append(centroid)
-					fingeringList.append(temp)			
-				fingeringList = sorted(fingeringList,key=lambda  x:x[3])
-				chordList.append(fingeringList)
-			self._ProgFingerings = chordList #sorted by fingering centroids
-			self.updateFretboard()
-
-			
-				
+		return scaleNotes				
 		
 #===============================
 				
@@ -1519,7 +1541,7 @@ def drawFingerboard(fingerboard):
 #draw frets
 
 		ui.set_color('white')  #temp
-		fretSpace = int((fingerboard.height - 2*fingerboard.nutOffset)/(fingerboard.numFrets))
+		#fretSpace = int((fingerboard.height - 2*fingerboard.nutOffset)/(fingerboard.numFrets))
 		
 		fingerboard.fretY = [0]
 		for index in range(fingerboard.numFrets):
@@ -1821,6 +1843,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		self.chord = None
 		self.chord=None
 		self.key = None
+		self.keyName = None
 		self.capos = None
 		self.twoOctaveScale = None
 		pub.subscribe(self.updateFretboard,'update.fretboard')
@@ -1838,17 +1861,20 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 						type = None,
 						is5StringBanjo = False,
 						root=None,
+						rootName = None,
 						chordName=None, 
 						chordNoteValues=None,
 						rootNoteValue=None, 
+						rootNoteName=None,
 						scale=None,
 						capos=None,
-						progFingeringsPointers = None,
+						progFingering = None,
 						progChordPointer = None,
-						progFingerings = None,
+						progChordNumberOfFingerings = None,
 						progChordInfo = None,
-						progCentroid = None):
-														
+						progCentroid = None):		
+							
+																																																			
 		self.fingerings = fingerings
 		self.fingeringPointer = fingeringPointer
 		self._scale_notes = scaleNotes
@@ -1860,15 +1886,16 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		self.chordName = chordName
 		self.chordNoteValues = chordNoteValues
 		self.key = rootNoteValue
+		self.keyName = rootNoteName
 		self.tuning = tuning
 		self.type = type
 		self.is5StringBanjo = is5StringBanjo
 		self.capos=capos
 		self.twoOctaveScale = twoOctaveScale
 		self.findScaleNotes = self.ChordScale if mode == "I" else None
-		self.progFingeringsPointers = progFingeringsPointers
+		self.cChordNumberOfFingerings = progChordNumberOfFingerings
 		self.cChordPointer = progChordPointer
-		self.cFingerings = progFingerings
+		self.cFingering = progFingering
 		self.cChordInfo = progChordInfo
 		self.cCentroid = progCentroid
 		
@@ -1893,9 +1920,11 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		
 	def set_chord(self,chordlist): # store current value of chord
 		self.chord = model._Chord
-		
-	def set_root(self,root):
-		self.root = model._RootNoteValue # get value of key
+#		
+#	def set_root(self,root):
+#		self.root = model._RootNoteValue
+#		self.rootName = model._RootNoteName # get value of key
+
 		
 	def set_chordnumDisplays(self,chord_num,num_chords):
 		self._chordNumTextView = chord_num
@@ -1951,27 +1980,24 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 				drawCapo(self,fret)
 		if self.tuning:
 			capoOffsets = model.capoOffsets()
-			if (self.fingerings and self.cc_mode == 'C') or (self.cc_mode == 'P' and self.cFingerings):
+			if (self.fingerings and self.cc_mode == 'C') or (self.cc_mode == 'P' and self.cFingering):
 				isProgression = self.cc_mode == 'P'
 				# if there are some, draw current fingering or chord tone frets
 				if not self.showChordScale:
 					if not isProgression:
+						Fingering = self.fingerings[self.fingeringPointer]
 						numChord = len(self.fingerings) 
 						chordNum = int(self.fingeringPointer+1)
-					else:
-						Fingerings = self.cFingerings[self.cChordPointer]
-						if not Fingerings:
-							return
-						fPointer = self.progFingeringsPointers[self.cChordPointer]		
-						numChord = len(Fingerings)
-						chordNum = int(fPointer+1)
+					else: # is progresssion
+						Fingering = self.cFingering
+						if not Fingering:
+							return		
+						numChord = self.cChordNumberOfFingerings
+						chordNum = self.cChordPointer + 1 
 					self._numChordsTextView.text = "{}".format(numChord)
 					self._chordNumTextView.text = "{}".format(chordNum)
 					middle_field.text = 'of'
-					if isProgression:
-						fingering,chordTones,fretPositions,centroid = self.cFingerings[self.cChordPointer][fPointer] 
-					else:	
-						fingering,chordTones,fretPositions = self.fingerings[self.fingeringPointer]
+					fingering,chordTones,fretPositions,centroid = Fingering
 					ui.set_color('red')
 					for i,string in enumerate(fingering):
 						x,y,chordtone,nutmarker = string
@@ -2235,8 +2261,8 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		touchEndTime = time.time()
 		DeltaT = touchEndTime - self.touchStartTime
 		distance = math.sqrt(DeltaX*DeltaX + DeltaY*DeltaY)
-		rate = distance/DeltaT
-		angle = math.atan2(DeltaY,DeltaX)*180/math.pi
+		#rate = distance/DeltaT
+		#angle = math.atan2(DeltaY,DeltaX)*180/math.pi
 		
 		if self.cc_mode == 'I':
 			if fretboard.findScaleNotes:
@@ -2301,7 +2327,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 				x,y = touch.location
 				fret = self.closest(y,self.fretY)
 				for i,fingering in enumerate(model._Fingerings):
-					_,_,frets = fingering
+					_,_,frets,_ = fingering
 					testVector =  sorted([x for x in frets if x > 0])
 					if fret - 2 <= testVector[0] <= fret + 2:
 						break
@@ -2328,7 +2354,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 			elif self.wasLongTouch: #jump to this fret
 				x,y = touch.location
 				fret = self.closest(y,self.fretY)
-				for i,fingering in enumerate(theseFingerings):
+				for i,fingering in enumerate(theseFingerings):  #need to leverage centroid
 					_,_,frets,_ = fingering
 					testVector =  sorted([x for x in frets if x > 0])
 					if fret - 2 <= testVector[0] <= fret + 2:
@@ -2351,7 +2377,6 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		return the center positions all markers.  X and open strings will be
 		marked at the nut"""
 		scaleNotes = model.getScaleNotes(fingering)
-		#if len(scaleNotes) != len(fingering):
 		chordDrawPositions = []
 		numStrings,offset,ss = self.stringSpacing()
 		for i,fretPosition in enumerate(fingering): #loop over strings, low to high
@@ -2378,7 +2403,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 			fingered = sorted([x%12 for x in fingered])
 			pure = []
 			missing_1 = []
-			missing_2 = []
+			#missing_2 = []
 			chord_list = []
 			for root in range(12):
 				notes_in_key = rotate(range(12),root)
@@ -3038,6 +3063,32 @@ def playScale(button):
 				sound.play_effect(getWaveName(tone,octave+model._InstrumentOctave))
 				time.sleep(fretboard.arpSpeed)
 		
+		
+def playProgression(button):	
+	if os.path.exists('waves'):
+		if not model._InstrumentOctave:
+			return
+		else:
+			baseOctave = model._InstrumentOctave
+		strings = model._InstrumentTuning
+		
+		for chordNumber in range(len(model._ProgFingerings)):
+			thisFingering = model._ProgFingeringsPointers[chordNumber]
+			cc = model._ProgFingerings[chordNumber][thisFingering]
+			frets = cc[2]
+			dead_notes = [item[3] == 'X' for item in cc[0]]
+			tones = []
+			for fret,string,dead_note in zip(frets,strings,dead_notes):
+				if  dead_note:
+					continue
+				octave,tone = divmod(string + fret,12)
+				tones.append((tone,octave+baseOctave))
+			for tone,octave in tones:
+				sound.play_effect(getWaveName(tone,octave))
+				time.sleep(0.075)
+			time.sleep(0.2)
+
+			
 def toggle_mode(sender,row):
 	global chordProgView
 	capos.reset()
@@ -3047,21 +3098,21 @@ def toggle_mode(sender,row):
 	'I': 
 		 {
 		     'hide':
-	'tableview_root tableview_type tableview_scale label1 button_scale_notes button_scale_tones chord_num label_middle button_play_scale num_chords lbl_chord lbl_fullchord lbl_definition btn_sharpFlat sp_span lbl_span tri_chord_label  button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid'.split(),
+	'tableview_root tableview_type tableview_scale label1 button_scale_notes button_scale_tones chord_num label_middle button_play_scale num_chords lbl_chord lbl_fullchord lbl_definition btn_sharpFlat sp_span lbl_span tri_chord_label  button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog'.split(),
 			'show':
 	('tableview_find', 'button_find', 'button_chord', 'button_arp', 'fretboard')
 	},
 	'C':    
 		{
 			'hide':
-	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_prog tableview_prog_display label_centroid switch_centroid'.split(),
+	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog'.split(),
 			'show': 
 	'tableview_root tableview_type label1 chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down label1 fretboard'.split()
 	},
 	'S':   
 		 {
 		 	'hide':
-	'tableview_type tableview_find button_find chord_num num_chords label_middle button_chord button_arp lbl_chord lbl_fullchord lbl_definition sp_span lbl_span button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid'.split(),
+	'tableview_type tableview_find button_find chord_num num_chords label_middle button_chord button_arp lbl_chord lbl_fullchord lbl_definition sp_span lbl_span button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog'.split(),
 			'show': 
 	'tableview_scale tableview_root button_scale_tones button_scale_notes button_play_scale btn_sharpFlat tri_chord_label label1 fretboard'.split(),
 	},
@@ -3070,7 +3121,7 @@ def toggle_mode(sender,row):
 			'hide':
 	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_type label1 tableview_type'.split(),
 			'show': 
-	'chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down tableview_prog tableview_root fretboard tableview_prog_display label_centroid switch_centroid'.split()
+	'chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down tableview_prog tableview_root fretboard tableview_prog_display label_centroid switch_centroid button_play_prog'.split()
 	},
 	}
 	pub.sendMessage('changemode',mode=newmode)
@@ -3116,7 +3167,7 @@ def onFind(button):
 		fingered = sorted([x%12 for x in fingered])
 		pure = []
 		missing_1 = []
-		missing_2 = []
+		#missing_2 = []
 		chord_list = []
 		for root in range(12):
 			notes_in_key = rotate(range(12),root)
@@ -3430,7 +3481,7 @@ class InstrumentEditor(ui.View):
 		
 	def onSpinnerLimit(self,sender,arrow):
 		string = int(sender.name[-1])
-		direction =  -1 if 'down' in arrow.name.lower() else 1
+		#direction =  -1 if 'down' in arrow.name.lower() else 1
 		pointer = sender.pointer
 		currentOctaves = [int(x.text) for x in self.octaveTextArray]
 		thisOctave = currentOctaves[string]
@@ -3484,54 +3535,7 @@ class ConfigView(ui.View):
 class SettingsView(ui.View):
 	def did_load(self):
 		ccc.settingsViewInit(self)
-			
-						
-def doProgression(sender,row):
-	global chordDiagrams,chordProgView # chordProgView is a container view for the chordprogs
-	fullWidth = chordProgView.width
-	fullHeight = chordProgView.height
-	panelWidth = fullWidth/2
-	panelHeight = fullHeight/2
-	if sender.name == 'dd_prog':
-		current = sender.current
-		key = keyDropDown.current['noteValue']
-	else:
-		current = progDropDown.current
-		key = sender.current['noteValue']
-	chords = current['chords']
-	for subv in chordDiagrams:
-		chordProgView.remove_subview(subv)
-	chordDiagrams.clear()
-	splits = [(int(x.split('-')[0]),x.split('-')[1]) for x in chords]
-	for i,val in enumerate(splits):
-		ofs,type = val
-		thisRow,thisCol = divmod(i,2)
-		upperX = thisCol*panelWidth
-		lowerX = upperX + panelWidth
-		upperY = thisRow*panelHeight
-		lowerY = upperY + panelHeight
-		thisCD = ChordDiagram(frame=(upperX, upperY, lowerX, lowerY),
-																			key = keyDropDown.current['noteValue'],
-																			offset = ofs, 
-																			chord = type,
-																			row = thisRow,
-																			col = thisCol,
-																			margin = 20)
-		chordProgView.add_subview(thisCD)
-		thisCD.send_to_back()
-		chordDiagrams.append(thisCD)
-
-	chordProgView.hidden=False
-	chordProgView.enabled=True
-
-	
-def doChordChange(sender,row):
-	pass
-	
-def doScaleChange(sender,row):
-	pass
-	
-	
+				
 	
 #---##########################################
 
@@ -3551,13 +3555,13 @@ class ProgDisplay(TVTools,object):
 		self.items = [{'title':(x[0]+x[2]), 'accessory_type':'none'} for x in progChords]
 		rowHeight = self._Delegator.row_height
 		self._Delegator.height = len(self.items)*rowHeight
+		self.setTableViewItemsRow(0)
 		self._Delegator.reload_data()
 
 	def tableview_did_select(self,tableView,section,row):  
 		self.setTableViewItemsRow(row)
 		tableView.reload_data()
 		time.sleep(0.1)
-		print(self.items[row])
 		pub.sendMessage('updateprogressionpointers',
 								nextChord=row,nextFingering=-1)
 						
@@ -3614,6 +3618,7 @@ class Progr(TVTools,object):
 		self._Delegator = delegator
 		self._expanded = None
 		self._contracted  = None
+		self.row = 0
 		pub.subscribe(self.updateProgressionSettings, 'updateProgressionSettings')
 
 	def setFrameConstants(self):
@@ -3648,36 +3653,44 @@ class Progr(TVTools,object):
 		for item in self.items:
 			item['accessory_type'] = 'none'
 			
-	def updateProgressionSettings(self):
+	def updateProgressionSettings(self): # called when root or instrument is changed
 		self._progFingerings = []
-		self.setTableViewItemsRow(1)
-		self.getProgressionChords(1) # row 0 is the "expand" request
-		for chord in self._progChords:
-			self._progFingerings.append(model.calc_fingerings(chordtypeEntry=chord))
+		if not self._progChords:
+			self.setTableViewItemsRow(1)
+			self.getProgressionChords(1) # row 0 is the "expand" request
+		else:
+			self.getProgressionChords(self.row) #account for entry 
+		for i,chord in enumerate(self._progChords):
+			theseFingerings = model.calc_fingerings(chordtypeEntry=chord)
+			self._progFingerings.append(theseFingerings)
 		pub.sendMessage('setprogressiondata', 
 						progFingerings=self._progFingerings, progChords=self._progChords)
-		
-			
+					
 	def createProgressionFingerings(self):
 		self._progFingerings= []
 		for chord in self._progChords:
-			self._progFingerings.append(model.calc_fingerings(chordtypeEntry=chord))
+			fingerings = model.calc_fingerings(chordtypeEntry=chord)
+			self._progFingerings.append(fingerings)
 
+			
 		
 	def getProgressionChords(self,row):
-		key = model._RootNoteName
+		keyNoteName = model._RootNoteName
 		keyNoteValue = model._RootNoteValue
 		self._progChords = []
-		if key:
+		if keyNoteName:
 			for chord in self.items[row]['chords']:
 				offset,type = chord.split('-')
 				realNote = (int(offset)+keyNoteValue) % 12
 				self._progChords.append((ccc['NOTE_NAMES'][realNote],realNote,type))
 
-	def tableview_did_select(self,tableView,section,row):  
+			
+
+	def tableview_did_select(self,tableView,section,row):  		
+		self.row = row 
 		if not model._InstrumentTuning:
 			return
-		if not model._RootNoteValue:
+		if not model._RootNoteName:
 			return
 		def animationExpand():
 			tableView.frame = self._expanded
@@ -3691,13 +3704,18 @@ class Progr(TVTools,object):
 			mainView['tableview_prog_display'].hidden = True
 		else:
 			self.setTableViewItemsRow(row)
-			self._prog = self.getProgressionChords(row)
+			self.getProgressionChords(row) 
+
+			pub.sendMessage('updateProgressionSettings')
 			tableView.reload_data()
 			ui.delay(doContract,0.1)		
 			mainView['tableview_prog_display'].hidden = False
 			self.createProgressionFingerings()
+			pub.sendMessage('setCentroid',centroid=self._progFingerings[0][-1])
 			pub.sendMessage('setprogressiondata', 
 						progFingerings=self._progFingerings, progChords=self._progChords)
+
+				
 						
 	def tableview_number_of_sections(self, tableview):
 		# Return the number of sections (defaults to 1)
@@ -3904,6 +3922,9 @@ if __name__ == "__main__":
 	progCentroidSwitch = mainView['switch_centroid']
 	progCentroidSwitch.action = model.onCentroidSwitch
 	pub.sendMessage('centroidswitch',switch=progCentroidSwitch.value)
+	
+	progPlayButton = mainView['button_play_prog']
+	progPlayButton.action = playProgression 
 	
 	toggle_mode(modeDropDown,0) # default to calc
 	mainView.present(style='full_screen',orientations=('landscape',))
