@@ -44,12 +44,11 @@ NOTES = {
 	'B': NOTE_B,
 	}
 	
-#noteTemp = sorted( NOTES.items())
 ROOT_LIST_CLEAN = [{'title':root, 'noteValue':note, 'accessory_type': 'none'} for root, note in sorted(NOTES.items())]
-#del noteTemp
-
 
 SCALENOTES = ['R','b2','2','b3','3','4','b5','5','#5','6','b7','7','R','b9','9','#9','3','11','#11','5','b13','13']
+
+
 
 # Chordtype definitions
 # These are guitar-centric
@@ -401,3 +400,5 @@ PROGRESSIONS = [
 						  ]
 PROG_LIST_CLEAN = [{'title': r['title'], 'chords':r['chords'], 'accessory_type': 'none'} for 
 					r in PROGRESSIONS]
+					
+PROGRESSION_ROOTS = 'I bII/#I II bIII/#II III IV bV/#IV V bVI/#V VI bVII/#VI VII'.split()
