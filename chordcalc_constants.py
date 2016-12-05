@@ -398,6 +398,7 @@ PROGRESSIONS = [
 							{'title': 'iim7-V7-IM7', 'chords':['2-m7','7-7','0-M7']},
 							{'title': 'vim7-iim7-V7-IM7', 'chords':['9-m7','2-m7','7-7','0-M7']},
 						  ]
+						  
 PROG_LIST_CLEAN = [{'title': r['title'], 'chords':r['chords'], 'accessory_type': 'none'} for 
 					r in PROGRESSIONS]
 					

@@ -149,6 +149,7 @@ class CCC(object):
 		CHORD_LIST_CLEAN
 		ROOT_LIST_CLEAN
 		PROG_LIST_CLEAN
+		PROGRESSIONS
 		'''.split()
 		
 		cccOut = {}
@@ -174,11 +175,8 @@ class CCC(object):
 		cccOut['CHORD_LIST_CLEAN'] = [{'title':c['title'], 'fingering':c['fingering'],                  'accessory_type':'none'} for c in chord.items]
 		
 		cccOut['ROOT_LIST_CLEAN'] = [{'title':r['title'], 'noteValue':r['noteValue'], 'accessory_type': 'none'} for r in root.items]
-		
-		print(progDisplay.items)
-		
-		cccOut['PROG_LIST_CLEAN'] = [{'title':r['title'], 'chords':r['chords'], 'accessory_type':'none'} 							for r in progs.items[1:]]		
-		cccOut['PROG_LIST_CLEAN'].insert(0,progs.items[0])
+				
+		cccOut['PROGRESSIONS'] = [{'title':r['title'], 'chords':r['chords']} for r in progs.items[1:]]	
 		
 		fh = open(ConfigFileName, 'w')
 		json.dump(cccOut,fh,indent=1)
@@ -1973,8 +1971,6 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 			elif abs(DeltaX) > 30 and abs(DeltaX) > abs(DeltaY): # horizontal sweep, small moves
 				_,_,xrange,_ = self.frame
 				currentChord = model._ProgChordPointer
-				print("in fretboard, currentChord at start is ",currentChord)
-				print("....len(model._ProgFingeringsPointers) ",len(model._ProgFingeringsPointers))
 				if DeltaX < 0: # previous chord
 					currentChord -= 1
 				else: # +ve
@@ -1982,7 +1978,6 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 				currentChord = max(0,currentChord)
 				currentChord = min(len(model._ProgFingeringsPointers)-1,currentChord)
 				pub.sendMessage('updateselectedchord',chord=currentChord)
-				print(".....after filtering currentChord ", currentChord)
 				pub.sendMessage('updateprogressionpointers', nextChord=currentChord, nextFingering=-1)
 				pub.sendMessage('updatefretboard')
 			elif self.wasLongTouch: #jump to this fret
@@ -2729,6 +2724,10 @@ class ProgressionEditor(TVTools,ui.View):
 		self.chordType.data_source = self.chordType.delegate = self
 		self.items = ccc['CHORD_LIST_CLEAN']
 		self.currentType = None
+		self.sequenceString = ''
+		self.sequenceNames = []
+		self.sequenceTuples = []
+		self.rootName = ''
 		
 		# build the button array
 		width = self.chordType.x - self.x		
@@ -2749,31 +2748,95 @@ class ProgressionEditor(TVTools,ui.View):
 			x = margin + (btnWidth + margin)*col
 			y = row*50 + 20
 			button.frame = (x,y,btnWidth,height)
-
+			button.action = self.onRootButton
 		
 	def onEdit(self): #enable editor
 		self.hidden = False
 		self.bring_to_front()
 		
+	def resetTable(self):
+		for item in self.items:
+			item['accessory_type'] = 'none'
+		self.chordType.reload_data()
+		
 	def onDone(self,button):
+		title = ''
+		chord = []
+		for seqName,seqTuple in zip(self.sequenceNames, self.sequenceTuples):
+			title += seqName
+			title += '-'
+			chord.append("{}-{}".format(seqTuple[1],seqTuple[2]))
+		title = title[:-1]
+		entry = {'title':title, 'chords':chord}
+		pub.sendMessage('addnewprogression',prog=entry)			
+		self.sequenceNames = []
+		self.sequenceTuples = []
+		self.send_to_back()
 		self.hidden = True
 		
 	def onUndo(self,button):
-		pass
+		if self.sequenceNames:
+			self.sequenceNames.pop()
+			self.sequenceTuples.pop()
+			self.sequenceString = ''
+			for seq in self.sequenceNames:
+				self.sequenceString += seq
+				self.sequenceString += ", "
+			self.sequenceString = self.sequenceString[:-2]
+			self.progSeq.text = self.sequenceString
+		self.resetTable()
+		
 		
 	def onCancel(self,button):
+		self.sequenceNames = []
+		self.sequenceTuples = []
 		self.send_to_back()
 		self.hidden = True
 	
 	def onNext(self,button):
-		pass
+		if self.rootName and self.chordType:
+			self.sequenceNames.append(self.progChord.text)
+			self.sequenceTuples.append((self.rootName,self.rootValue,self.currentType))
+		self.sequenceString = ''
+		for seq in self.sequenceNames:
+			self.sequenceString += seq
+			self.sequenceString += ", "
+		self.sequenceString = self.sequenceString[:-2]
+		self.progSeq.text = self.sequenceString
+		self.resetTable()
+		
 		
 	def onClear(self,button):
-		pass
+		self.sequenceTuples = []
+		self.sequenceString = ''
+		self.sequenceNames = []
+		self.progSeq.text = ''
+		self.resetTable()
+		
+		
+	def onRootButton(self,button):
+		name = button.name
+		text = button.title
+		if r"/" in text:
+			self.rootName = re.match(r'^(.*)/',text).groups()[0]
+		else:
+			self.rootName = text
+		self.progChord.text = self.rootName
+		self.rootValue = ccc['PROGRESSION_ROOTS'].index(text)
 
+		
 	def tableview_did_select(self,tableView,section,row):  
+		if not self.rootName:
+			return
 		self.setTableViewItemsRow(row)
-		self.currentType = self.items[row]
+		self.currentType = self.items[row]['title']
+		self.minor = (self.currentType != 'maj') and (self.currentType[0] in 'm-')
+		if self.minor:
+			self.progChord.text = self.rootName.lower()
+		else:
+			self.progChord.text = self.rootName	
+		if not (self.currentType in ['maj', 'min']):
+			self.progChord.text += self.currentType		
 		tableView.reload_data()
 
 
@@ -3005,6 +3068,7 @@ class ProgDisplay(TVTools,object):
 		pub.subscribe(self.updateProgressionList,'setprogressiondata')
 		pub.subscribe(self.updateProgressionChord,'updateselectedchord')
 
+
 		
 	def reset(self):
 		for item in self.items:
@@ -3020,6 +3084,8 @@ class ProgDisplay(TVTools,object):
 		self._Delegator.height = len(self.items)*rowHeight
 		self.setTableViewItemsRow(0)
 		self._Delegator.reload_data()
+		
+
 							
 	def tableview_did_select(self,tableView,section,row):  
 		self.setTableViewItemsRow(row)
@@ -3083,8 +3149,11 @@ class Progr(TVTools,object):
 		self._Delegator = delegator
 		self._expanded = None
 		self._contracted  = None
+		self.currentListSize = len(self.items)
+		self.editing = False
 		self.row = 0
 		pub.subscribe(self.updateProgressionSettings, 'updateProgressionSettings')
+		pub.subscribe(self.addNewProgression, 'addnewprogression')
 
 	def setFrameConstants(self):
 		x,y,width,height = self._Delegator.frame
@@ -3099,7 +3168,7 @@ class Progr(TVTools,object):
 		self._isExpanded = True
 		
 	def contract(self):
-		self._delegator.frame = self._contracted
+		self._Delegator.frame = self._contracted
 		self._isExpanded = False
 		
 		
@@ -3118,6 +3187,21 @@ class Progr(TVTools,object):
 		for item in self.items:
 			item['accessory_type'] = 'none'
 			
+
+	def progListEdit(self,button):
+		if self.editing:
+			self.contract()
+			self.editing = False
+			self._Delegator.editing = False
+			self._Delegator.reload_data()
+		else:
+			self.expand()
+			self.editing = True
+			self._Delegator.editing = True
+			for item in self.items:
+				item['accessory_type'] = 'none'
+			
+		
 	def updateProgressionSettings(self): # called when root or instrument is changed
 		self._progFingerings = []
 		if not self._progChords:
@@ -3138,7 +3222,10 @@ class Progr(TVTools,object):
 			self._progFingerings.append(fingerings)
 
 			
-		
+	def addNewProgression(self,prog=None):
+		self.items.append({'title':prog['title'], 'chords':prog['chords'], 'accessory_type':'none'})
+		self._Delegator.reload_data()
+			
 	def getProgressionChords(self,row):
 		keyNoteName = model._RootNoteName
 		keyNoteValue = model._RootNoteValue
@@ -3148,8 +3235,6 @@ class Progr(TVTools,object):
 				offset,type = chord.split('-')
 				realNote = (int(offset)+keyNoteValue) % 12
 				self._progChords.append((ccc['NOTE_NAMES'][realNote],realNote,type))
-
-			
 
 	def tableview_did_select(self,tableView,section,row):  		
 		self.row = row 
@@ -3188,7 +3273,7 @@ class Progr(TVTools,object):
 		
 	def tableview_number_of_rows(self, tableview, section):
 		# Return the number of rows in the section
-		return len(self.items)
+		return self.currentListSize
 		
 	def tableview_cell_for_row(self, tableview, section, row):
 		# Create and return a cell for the given section/row
@@ -3199,7 +3284,7 @@ class Progr(TVTools,object):
 		
 	def tableview_can_delete(self, tableview, section, row):
 		# Return True if the user should be able to delete the given row.
-		return False
+		return self.editing
 		
 	def tableview_can_move(self, tableview, section, row):
 		# Return True if a reordering control should be shown for the given row (in editing mode).
@@ -3207,8 +3292,8 @@ class Progr(TVTools,object):
 		
 	def tableview_delete(self, tableview, section, row):
 		# Called when the user confirms deletion of the given row.
-		self.currentNumLines -=1 # see above regarding hte "syncing"
-		self.delegator.delete_rows((row,)) # this animates the deletion  could also 'tableview.reload_data()'
+		self.currentListSize -=1 # see above regarding hte "syncing"
+		self._Delegator.delete_rows((row,)) # this animates the deletion  could also 'tableview.reload_data()'
 		del self.items[row]
 		
 	def tableview_move_row(self, tableview, from_section, from_row, to_section, to_row):
@@ -3762,21 +3847,21 @@ def toggle_mode(sender,row):
 	'I': 
 		 {
 		     'hide':
-	'tableview_root tableview_type tableview_scale label1 button_scale_notes button_scale_tones chord_num label_middle button_play_scale num_chords lbl_chord lbl_fullchord lbl_definition btn_sharpFlat sp_span lbl_span tri_chord_label  button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog'.split(),
+	'tableview_root tableview_type tableview_scale label1 button_scale_notes button_scale_tones chord_num label_middle button_play_scale num_chords lbl_chord lbl_fullchord lbl_definition btn_sharpFlat sp_span lbl_span tri_chord_label  button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog button_edit_prog_tv'.split(),
 			'show':
 	('tableview_find', 'button_find', 'button_chord', 'button_arp', 'fretboard')
 	},
 	'C':    
 		{
 			'hide':
-	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog'.split(),
+	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog button_edit_prog_tv'.split(),
 			'show': 
 	'tableview_root tableview_type label1 chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down label1 fretboard'.split()
 	},
 	'S':   
 		 {
 		 	'hide':
-	'tableview_type tableview_find button_find chord_num num_chords label_middle button_chord button_arp lbl_chord lbl_fullchord lbl_definition sp_span lbl_span button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog'.split(),
+	'tableview_type tableview_find button_find chord_num num_chords label_middle button_chord button_arp lbl_chord lbl_fullchord lbl_definition sp_span lbl_span button_up button_down tableview_prog tableview_prog_display label_centroid switch_centroid button_play_prog button_edit_prog_tv'.split(),
 			'show': 
 	'tableview_scale tableview_root button_scale_tones button_scale_notes button_play_scale btn_sharpFlat tri_chord_label label1 fretboard'.split(),
 	},
@@ -3785,7 +3870,7 @@ def toggle_mode(sender,row):
 			'hide':
 	'tableview_find button_find button_scale_tones button_scale_notes tableview_scale button_play_scale lbl_chord lbl_fullchord btn_sharpFlat tableview_type label1 tableview_type'.split(),
 			'show': 
-	'chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down tableview_prog tableview_root fretboard tableview_prog_display label_centroid switch_centroid button_play_prog'.split()
+	'chord_num num_chords label_middle button_chord button_arp sp_span lbl_span tri_chord_label button_up button_down tableview_prog tableview_root fretboard tableview_prog_display label_centroid switch_centroid button_play_prog button_edit_prog_tv'.split()
 	},
 	}
 	pub.sendMessage('changemode',mode=newmode)
@@ -3816,7 +3901,7 @@ def toggle_mode(sender,row):
 		fretboard.touched = {}
 	elif newmode == 'P':
 		mainView['tableview_prog_display'].hidden = True
-		mainView['button_edit_chord'].title = 'progr'
+		mainView['button_edit_chord'].title = 'new progr'
 	fretboard.set_needs_display()
 	mainView.set_needs_display()
 	
@@ -4053,6 +4138,9 @@ if __name__ == "__main__":
 	
 	progPlayButton = mainView['button_play_prog']
 	progPlayButton.action = playProgression 
+	
+	progListEditButton = mainView['button_edit_prog_tv']
+	progListEditButton.action = progs.progListEdit
 	
 	toggle_mode(modeDropDown,0) # default to calc
 	mainView.present(style='full_screen',orientations=('landscape',))
