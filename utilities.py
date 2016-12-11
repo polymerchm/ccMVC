@@ -64,9 +64,9 @@ def chordFingeringCentroid(fingering):
 	    ignore open or unplayed notes '''
 	sum = 0
 	count = 0
-	for string in fingering:
-		if string >= 0:
-			sum += string
+	for fret in fingering:
+		if fret >= 0:
+			sum += fret
 			count += 1
 	return sum/count
 			
