@@ -11,6 +11,7 @@ Version 6.0
 March 3, 2015
 
 iPAD MVC iOS device version
+settings Branch
 
 View objects:
 -------------
@@ -48,7 +49,7 @@ import sys
 if '.' not in sys.path: sys.path.append('.')
 
 #--- Main imports
-import os.path, re, ui, console, sound, time, math, json, importlib
+import os.path, re, ui, console, sound, time, math, json, importlib, markdown2
 from operator import add
 import pubsub; importlib.reload(pubsub); from pubsub import pub
 
@@ -68,6 +69,7 @@ import DropDown; importlib.reload(DropDown); from DropDown import DropDown
 
 SettingsFileName = 'settings.ini'
 ConfigFileName = 'config.ini'
+InfoFile = 'info.md'
 
 #--- CCC 
 class CCC(object):
@@ -391,7 +393,16 @@ class Model(object):
 		self.play_arpMin = 0.05
 		self.play_arpMax = 0.5
 		self.play_arpSpeed = (self.play_arpMax + self.play_arpMin)/2.0
-											
+		self._Info = None
+		self._editableTables = '''  tableview_type
+									tableview_inst_tune
+									tableview_filters
+									tableview_capos'''.split()
+		self._TableEditButtons = {}
+		self._Edit_buttonWidth = 20
+		self._Edit_buttonHeight = 20
+		self._Edit_margin = 2
+																
 		pub.subscribe(self.changeMode,'changemode')	
 		pub.subscribe(self.changeRoot,'changeroot')
 		pub.subscribe(self.changeChord,'changechord')
@@ -402,9 +413,6 @@ class Model(object):
 		pub.subscribe(self.changeSpeed,'changespeed')
 		pub.subscribe(self.changeVolume,'changevolume')
 		pub.subscribe(self.changeFingering,'changefingering')		
-		#pub.subscribe(self.changeConfig,'changeconfig')		
-		#pub.subscribe(self.newInstrument,'newinstrument')	
-		#pub.subscribe(self.fingerboardRequest,'fingerboardrequest')
 		pub.subscribe(self.toggleChordScaleView,'toggleshowchordscaleview')
 		pub.subscribe(self.setScaleFrets,'setscalefrets')
 		pub.subscribe(self.setFindScale,'updatefindscale')
@@ -415,6 +423,8 @@ class Model(object):
 		pub.subscribe(self.updateCentroidSwitch,'centroidswitch')
 		pub.subscribe(self.setCentroid, 'setcentroid')
 		pub.subscribe(self.setDoubleStopFlag,'setdoublestopflag')
+		pub.subscribe(self.showInfo,'showinfo')
+		pub.subscribe(self.onEditTables,'onedittables')
 			
 		######################################		
 		#handy status variable
@@ -568,7 +578,7 @@ class Model(object):
 			thisChordInfo = self._ProgChords[self._ProgChordPointer]
 			thisChordNumberOfFingerings = len(self._ProgFingerings[self._ProgChordPointer])
 			self._ProgCentroid = thisChordFingering[-1]	
-			setChordSpelling(keyNoteValue=self._RootNoteValue, keyName=self._RootNoteName, 							chordNoteValues=self._ChordNoteValues)		
+			setChordSpelling(keyNoteValue=thisChordInfo[1], keyName=thisChordInfo[0], 							chordNoteValues=chord.getNotesByName(thisChordInfo[2]))		
 		pub.sendMessage('update.fretboard',	
 						mode=self._Mode, 
 						fingerings=self._Fingerings,
@@ -601,7 +611,64 @@ class Model(object):
 		middle_field.text = 'No Chords'
 		
 		
-																																		
+	def createTableEditButtons(self,mainView):
+		self._TableEditButtons = {}
+		self._editingDone = mainView['button_editing_done']
+		self._editingDone.action = self.tableEditDone
+		self._editingDone.send_to_back()
+		self._editingDone.hidden = True		
+		for name in self._editableTables:
+			table = mainView[name]
+			frame = table.frame # in mainView's coordinate system
+			buttonX = table.width - self._Edit_buttonWidth + table.x
+			buttonY = table.y - self._Edit_buttonHeight - self._Edit_margin
+			buttonName = "button_{}".format(name)
+			button = ui.Button(frame=(buttonX,buttonY,self._Edit_buttonWidth,self._Edit_buttonHeight),
+							    name=buttonName)
+			mainView.add_subview(button)
+			button.title = ''
+			button.image = ui.Image('iob:compose_32')
+			button.action = table.data_source.onEdit
+			button.hidden = True
+			self._TableEditButtons[buttonName] = (button,table)
+			
+	def onEditTables(self):	
+		self._editingDone.hidden = False
+		self._editingDone.bring_to_front()
+		for  key in self._TableEditButtons.keys():
+			button,table = self._TableEditButtons[key]
+			frame = table.frame # in mainView's coordinate system
+			buttonX = table.width - self._Edit_buttonWidth + table.x
+			if button.name.endswith('type'):
+				buttonX -= 10 # fix up this one
+			buttonY = table.y - self._Edit_buttonHeight - self._Edit_margin
+			button.frame = (buttonX,buttonY,self._Edit_buttonWidth,self._Edit_buttonHeight)
+			button.hidden = False
+			button.bring_to_front()
+	
+	def tableEditDone(self,button):
+		for key in self._TableEditButtons.keys():
+			button,_ = self._TableEditButtons[key]
+			button.hidden = True
+		self._editingDone.hidden = True
+		self._editingDone.send_to_back()
+			
+		
+				
+	def showInfo(self):
+		infoView = mainView['webview_info']
+		if not self._Info:
+			fh = open(InfoFile,'r')
+			text = fh.read()
+			fh.close()
+			self._Info = markdown2.markdown(text)
+			infoView.bring_to_front()	
+			infoView.load_html(self._Info)	
+		if infoView.hidden:
+			infoView.hidden = False
+		else:
+			infoView.hidden = True									
+																																																				
 	def updateMultiDisplays(self):
 		if self._Mode == 'C':
 			midText,lowText = self.getChordSpelling()
@@ -769,7 +836,7 @@ class Model(object):
 		pass
 		
 	def changeSpeed(self,speed=None):
-		self.play_arpSpeed = self.play_arpMin*v + (1.0-v)*self.play_arpMax
+		self.play_arpSpeed = self.play_arpMin*speed + (1.0-speed)*self.play_arpMax
 		
 	def changeVolume(self,**kwargs):
 		pass
@@ -1332,10 +1399,12 @@ class Instrument(TVTools,object):
 		
 	def onEdit(self,button):
 		if self.editing:
+			button.image = ui.Image('iob:compose_32')
 			self.editing = False
 			self.delegator.editing = False
 			self.delegator.reload_data()
 		else:
+			button.image = ui.Image('iob:checkmark_32')
 			self.editing = True
 			self.delegator.editing = True
 			self.tuning = {}
@@ -1934,6 +2003,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 			pub.sendMessage('setscalefrets',location=self.location,mode=self.scale_mode)
 
 		elif self.cc_mode == 'C':
+			if not model._Fingerings: return
 			if abs(DeltaY) > 30 and abs(DeltaY) > abs(DeltaX): #  vertical sweep
 				_,_,_,yrange = self.frame
 				fraction = DeltaY/yrange
@@ -1977,6 +2047,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 				pub.sendMessage('toggleshowchordscaleview')
 		elif self.cc_mode == 'P':
 			theseFingerings = model._ProgFingerings[model._ProgChordPointer]
+			if len(theseFingerings) == 0: return
 			if abs(DeltaY) > 30 and abs(DeltaY) > abs(DeltaX): #  vertical sweep
 				_,_,_,yrange = self.frame
 				fraction = DeltaY/yrange
@@ -2096,9 +2167,11 @@ class Chord(TVTools,object):
 		
 	def onEdit(self,button):
 		if self.delegator.editing:
+			button.image = ui.Image('iob:compose_32')
 			self.delegator.editing = False
 			self.delegator.reload_data()
 		else:
+			button.image = ui.Image('iob:checkmark_32')
 			self.delegator.editing = True
 			self.chord = {}
 			for item in self.items:
@@ -2180,10 +2253,7 @@ class Scale(TVTools,object):
 			return self._current['title']
 		else:
 			return None
-			
-	def onEdit(self,button):
-		pass
-		
+					
 	def __getitem__(self,type):
 		try:
 			return self.scale[type]
@@ -2311,9 +2381,11 @@ class Filters(ui.View):
 		
 	def onEdit(self,button):
 		if self.delegator.editing:
+			button.image = ui.Image('iob:compose_32')
 			self.delegator.editing = False
 			self.delegator.reload_data()
 		else:
+			button.image = ui.Image('iob:checkmark_32')
 			self.delegator.editing = True
 			self.chord = {}
 			for item in self.items:
@@ -2431,6 +2503,7 @@ class Capos(object):
 		pub.subscribe(self.capoSetFret,'sendfrettocapo')
 		pub.subscribe(self.reset,'resetcapositems')
 
+
 		
 	@property
 	def row(self):
@@ -2438,9 +2511,11 @@ class Capos(object):
 		
 	def onEdit(self,button):
 		if self.delegator.editing:
+			button.image = ui.Image('iob:compose_32')
 			self.delegator.editing = False
 			self.delegator.reload_data()
 		else:
+			button.image = ui.Image('iob:checkmark_32')
 			self.delegator.editing = True
 			self.capos = {}
 			for item in self.items:
@@ -2653,6 +2728,61 @@ class SettingListDelegate(object):
 		selection = self.items[row]
 		pub.sendMessage('changesettings',settings=selection)
 
+#--- =================================
+
+class Settings(ui.View):
+	def did_load(self):
+		self.hidden = True
+		for subview in self.subviews:
+			name = subview.name
+			if name.endswith("close"):
+				self[name].action = self.closeSettingsPanel
+			elif name.endswith('load'):
+				self[name].action = self.loadSettings
+			elif name.endswith('save'):
+				self[name].action = self.saveSettings
+			elif name.endswith('config'):
+				self[name].action = self.doConfig
+			elif name.endswith('tables'):
+				self[name].action = self.tablesEdit
+			elif name.endswith('instrument'):
+				self[name].action = self.newInstrument
+		pub.subscribe(self.displaySettingsPanel,'displaysettingspanel')
+		pub.subscribe(self.toggleSettingsPanel,'togglesettingspanel')
+		
+	def displaySettingsPanel(self):
+		self.hidden = False
+		
+	def toggleSettingsPanel(self):
+		self.bring_to_front()
+		if self.hidden:
+			self.hidden = False
+		else:
+			self.hidden = True
+			
+	def closeSettingsPanel(self,button):
+		self.hidden = True
+		
+	def doConfig(self,button):
+		self.hidden = True
+		ccc.onConfigMain(button)
+	
+	def saveSettings(self,button):
+		self.hidden = True
+		ccc.onSettingsSave(button)
+	
+	def loadSettings(self,button):
+		self.hidden = True
+		ccc.onSettingsLoad(button)
+		
+	def tablesEdit(self,button):
+		self.hidden = True
+		pub.sendMessage('onedittables')
+		
+	def newInstrument(self,button):
+		self.hidden = True
+		mainView['view_instrumentEditor'].onNewInstrument(button)
+	
 		
 #--- ===========================================
 			
@@ -3995,7 +4125,7 @@ def onSliderVolume(sender):
 	
 def onSliderSpeed(sender):
 	''' respond to cnage in speed '''
-	pub.sendMessage('setspeed',speed=sender.value)
+	pub.sendMessage('changespeed',speed=sender.value)
 
 	
 def onSpanSpinner(sender):
@@ -4024,7 +4154,12 @@ def setDisplays(top,middle,bottom):
 		numChordsTextView.hidden = True
 		
 
-
+def onInfoButton(sender):
+	pub.sendMessage('showinfo')
+	
+def onSettingsButton(sender):
+	pub.sendMessage('togglesettingspanel')
+	
 
 #--- MAIN PROGRAM 
 
@@ -4072,7 +4207,6 @@ if __name__ == "__main__":
 	chord = Chord(ccc['CHORD_LIST_CLEAN'])
 	chord.reset()
 	tvType.data_source = tvType.delegate = chord
-	mainView['button_edit_chord'].action = onChordEditButton
 	
 	tvInst = mainView['tableview_inst_tune']
 	tuningDisplay = mainView['button_tuning']
@@ -4087,7 +4221,6 @@ if __name__ == "__main__":
 	
 	# fretboard is a custom view and is instanciated by the ui.load_view process
 	instrument = Instrument(ccc['TUNING_LIST_CLEAN'])
-	mainView['button_edit_instrument'].action = instrument.onEdit
 	instrument.reset()
 	tvInst.data_source = tvInst.delegate = fretboard.instrument = instrument
 	
@@ -4100,7 +4233,7 @@ if __name__ == "__main__":
 	filters.instrument = instrument
 	tvFilters.data_source = tvFilters.delegate = filters
 	tvFilters.hidden = False
-	mainView['button_edit_filters'].action = filters.onEdit
+
 	
 	tvFind = mainView['tableview_find']
 	find = Find(items=[],delegator=tvFind)
@@ -4133,7 +4266,6 @@ if __name__ == "__main__":
 	tvCapos = mainView['tableview_capos']
 	capos = Capos(ccc['CAPOS'])
 	pub.subscribe(capos.syncNumStrings,'syncnumstrings')
-	mainView['button_edit_capos'].action = capos.onEdit
 	tvCapos.data_source = tvCapos.delegate = capos
 	
 	spanSpinner = Spinner(spinnerSize=(80,50),
@@ -4155,15 +4287,12 @@ if __name__ == "__main__":
 	pub.subscribe(syncSpanSpinner,'syncspanspinner')
 	mainView['view_fretEnter'].hidden = True
 	mainView['sp_span'].hidden = True
-	mainView['button_save_config'].action = ccc.onConfigMain
 	mainView['view_settingsView'].hidden = True
 	settings = SettingListDelegate()
 	mainView['view_settingsView']['tv_SettingsList'].data_source = settings
 	mainView['view_settingsView']['tv_SettingsList'].delegate = settings
-	mainView['button_save'].action = ccc.onSettingsSave
-	mainView['button_load'].action = ccc.onSettingsLoad	
 	mainView['view_instrumentEditor'].hidden = True
-	mainView['button_new_instrument'].action = mainView['view_instrumentEditor'].onNewInstrument
+
 	
 	
 
@@ -4205,6 +4334,16 @@ if __name__ == "__main__":
 	progListEditButton = mainView['button_edit_prog_tv']
 	progListEditButton.action = progs.progListEdit
 	
+	infoButton = mainView['button_info']
+	infoButton.action = onInfoButton
+	
+	settingsButton = mainView['button_settings']
+	settingsButton.action = onSettingsButton
+	
+	mainView['webview_info'].hidden = True
+
+	model.createTableEditButtons(mainView)
 	toggle_mode(modeDropDown,0) # default to calc
 	pub.sendMessage('setdefaultsettings')
+	tvFind.hidden = True
 	mainView.present(style='full_screen',orientations=('landscape',))
