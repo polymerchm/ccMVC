@@ -374,6 +374,7 @@ class Model(object):
 		self._ProgCentroid = None # fret centroid of currently displayed chord
 		self._ProgCentroidMode = False
 		self._DoubleStopFlag = False
+		self._justFretboard = False
 	
 #--- ---fretboard constants
 
@@ -563,22 +564,23 @@ class Model(object):
 			if (self._FindKey and self._FindChord):			
 				self._ChordScale = self.calc_chord_scale(pKey=self._FindKey, pChord=self._FindChord)
 		elif self._Mode == 'P':
-			if not self._ProgFingeringsPointers:
-				return
-			if  self._ProgChordPointer == None:
-				return
-			if not self._ProgFingerings:
-				return
-			thisChordPointer = self._ProgFingeringsPointers[self._ProgChordPointer]
-			for fingering in self._ProgFingerings:
-				if len(fingering) == 0:
-					setDisplays('','no chords','')
-					return
-			thisChordFingering = self._ProgFingerings[self._ProgChordPointer][thisChordPointer]
-			thisChordInfo = self._ProgChords[self._ProgChordPointer]
-			thisChordNumberOfFingerings = len(self._ProgFingerings[self._ProgChordPointer])
-			self._ProgCentroid = thisChordFingering[-1]	
-			setChordSpelling(keyNoteValue=thisChordInfo[1], keyName=thisChordInfo[0], 							chordNoteValues=chord.getNotesByName(thisChordInfo[2]))		
+			self._justFretboard = False
+			if not self._ProgFingeringsPointers: 	self._justFretboard = True
+			if self._ProgChordPointer == None: 		self._justFretboard = True
+			if not self._ProgFingerings: 			self._justFretboard = True	
+			if self._justFretboard:
+				setDisplays('','','')
+			else:
+				thisChordPointer = self._ProgFingeringsPointers[self._ProgChordPointer]
+				for fingering in self._ProgFingerings:
+					if len(fingering) == 0:
+						setDisplays('','no chords','')
+						return
+				thisChordFingering = self._ProgFingerings[self._ProgChordPointer][thisChordPointer]
+				thisChordInfo = self._ProgChords[self._ProgChordPointer]
+				thisChordNumberOfFingerings = len(self._ProgFingerings[self._ProgChordPointer])
+				self._ProgCentroid = thisChordFingering[-1]	
+				setChordSpelling(keyNoteValue=thisChordInfo[1], keyName=thisChordInfo[0], 							chordNoteValues=chord.getNotesByName(thisChordInfo[2]))		
 		pub.sendMessage('update.fretboard',	
 						mode=self._Mode, 
 						fingerings=self._Fingerings,
@@ -601,7 +603,8 @@ class Model(object):
 						progChordPointer = thisChordPointer,
 						progChordNumberOfFingerings = thisChordNumberOfFingerings,
 						progChordInfo = thisChordInfo,
-						progCentroid = self._ProgCentroid	
+						progCentroid = self._ProgCentroid,
+						justFretboard = self._justFretboard
 						)
 		
 								
@@ -657,16 +660,20 @@ class Model(object):
 				
 	def showInfo(self):
 		infoView = mainView['webview_info']
+		infoButton = mainView['button_info']
 		if not self._Info:
 			fh = open(InfoFile,'r')
 			text = fh.read()
 			fh.close()
 			self._Info = markdown2.markdown(text)
-			infoView.bring_to_front()	
 			infoView.load_html(self._Info)	
 		if infoView.hidden:
+			mainViewShield.conceal()
+			infoView.bring_to_front()	
+			infoButton.bring_to_front()
 			infoView.hidden = False
 		else:
+			mainViewShield.reveal()
 			infoView.hidden = True									
 																																																				
 	def updateMultiDisplays(self):
@@ -1093,7 +1100,7 @@ class Model(object):
 		return newlist
 		
 
-	def getScaleNotes(self,fingering):
+	def getScaleNotes(self,fingering,debug=False):
 		if self._Mode == 'P':
 			if self._ProgChords:
 				rootNoteValue = self._ProgCurrentRootValue
@@ -1106,10 +1113,10 @@ class Model(object):
 			if v == -1:
 				scalenotes.append('X')
 			else:
-				#effTuning = self._InstrumentTuning[i]
-#				if self._is5StringBanjo and i == 0:
-#					effTuning = self._InstrumentTuning[i] - self.fretboard_fret5thStringBanjo
-				fingerednote = (self._InstrumentTuning[i] + fingering[i]) % 12
+				effTuning = self._InstrumentTuning[i]
+				if self._is5StringBanjo and i == 0:
+					effTuning = self._InstrumentTuning[i] - self.fretboard_fret5thStringBanjo
+				fingerednote = (effTuning + fingering[i]) % 12
 
 				for chordrelnote in self._ChordNoteValues:
 					chordnote = ( rootNoteValue + chordrelnote) % 12
@@ -1295,8 +1302,7 @@ class Model(object):
 		try:
 			thisIndex = fretsOnStrings[thisString].index(thisStringFret)
 		except ValueError:
-			console.hud_alert('error, lin 1201 ish, see console')
-			print (fretsOnStrings[thisString], thisStringFret)
+			console.hud_alert('error, lin 1305 ish')
 		scaleNotes = [self.fretboard_location]
 		thisStringCount = 1 if thisStringFret else 0
 		#nextStringNote = scale_notes[thisString+1][1]
@@ -1535,7 +1541,6 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		self.showChordScale = False
 		self.ChordScale = []
 		self.ChordScaleFrets = []
-		self.fret5thStringBanjo = 5
 		self.wasTouched = False
 		self.inLongTouch = False
 		self.longTouchDelay = 0.5
@@ -1574,7 +1579,8 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 						progChordPointer = None,
 						progChordNumberOfFingerings = None,
 						progChordInfo = None,
-						progCentroid = None):		
+						progCentroid = None,
+						justFretboard = None):		
 							
 																																																			
 		self.fingerings = fingerings
@@ -1600,6 +1606,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		self.cFingering = progFingering
 		self.cChordInfo = progChordInfo
 		self.cCentroid = progCentroid
+		self.justFretboard = justFretboard
 		
 		try:
 			self.scaleType = scale
@@ -1676,10 +1683,16 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 		''' create fretboard, and note display '''
 			
 		drawFingerboard(self)
+		if self.justFretboard: 
+			return
 		
 		if model._Capos:
 			for fret in model._Capos.keys():
 				drawCapo(self,fret)
+				
+		if model._is5StringBanjo:
+			fret5SB = model.fretboard_fret5thStringBanjo		
+		
 		if self.tuning:
 			capoOffsets = model.capoOffsets()
 			if (self.fingerings and self.cc_mode == 'C') or (self.cc_mode == 'P' and self.cFingering):
@@ -1707,7 +1720,7 @@ class Fretboard(ui.View): # display fingerboard and fingering of current chord/i
 						x,y,chordtone,nutmarker = string
 						if i == 0 and instrument.is5StringBanjo:
 							if fretPositions[i] == -1:
-								y = (self.fretDistance(self.scale(),self.fret5thStringBanjo)+self.fretDistance(self.scale(),self.fret5thStringBanjo-1))/2
+								y = (self.fretDistance(self.scale(),model.fretboard_fret5thStringBanjo)+self.fretDistance(self.scale(),model.fretboard_fret5thStringBanjo-1))/2
 						#a = fretPositions[i]
 						#b = capoOffsets[i]
 						try:
@@ -2754,13 +2767,16 @@ class Settings(ui.View):
 		self.hidden = False
 		
 	def toggleSettingsPanel(self):
-		self.bring_to_front()
 		if self.hidden:
+			mainViewShield.conceal()
+			self.bring_to_front()
 			self.hidden = False
 		else:
+			mainViewShield.reveal()
 			self.hidden = True
 			
 	def closeSettingsPanel(self,button):
+		mainViewShield.reveal()
 		self.hidden = True
 		
 	def doConfig(self,button):
@@ -3713,7 +3729,7 @@ def drawFingerboard(fingerboard):
 		
 		if fingerboard.is5StringBanjo: # draw 5th string segment
 			radius = 30
-			fret5SB = fingerboard.fret5thStringBanjo
+			fret5SB = model.fretboard_fret5thStringBanjo
 			ui.set_color('#4C4722')
 			fretboard = ui.Path.rect(0,fingerboard.fretDistance(fingerboard.scale(),fret5SB-1)+radius,segment,height-radius)
 			fretboard.fill()
@@ -3975,7 +3991,7 @@ def playScale(button):
 				sound.play_effect(getWaveName(tone,octave+model._InstrumentOctave))
 				time.sleep(model.play_arpSpeed)
 
-						
+@ui.in_background						
 def playProgression(button):			
 	if os.path.exists('waves'):
 		if not model._InstrumentOctave:
@@ -3985,6 +4001,11 @@ def playProgression(button):
 		strings = model._InstrumentTuning
 		
 		for chordNumber in range(len(model._ProgFingerings)):
+			pub.sendMessage('updateprogressionpointers',
+								nextChord=chordNumber,nextFingering=-1)
+			pub.sendMessage('updateselectedchord',chord=chordNumber)
+								
+
 			thisFingering = model._ProgFingeringsPointers[chordNumber]
 			cc = model._ProgFingerings[chordNumber][thisFingering]
 			frets = cc[2]

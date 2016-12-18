@@ -385,12 +385,12 @@
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
           "name" : "tableview_scale",
+          "uuid" : "AC93143A-DA27-4C2B-8DB5-184B6CE51D41",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "uuid" : "AC93143A-DA27-4C2B-8DB5-184B6CE51D41",
           "data_source_delete_enabled" : true,
           "data_source_font_size" : 18,
-          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "row_height" : 36
         }
       },
@@ -406,12 +406,12 @@
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
           "name" : "tableview_find",
+          "uuid" : "4E2A645B-4997-458A-92C9-BEFE4A4065C8",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "uuid" : "4E2A645B-4997-458A-92C9-BEFE4A4065C8",
           "data_source_delete_enabled" : true,
           "data_source_font_size" : 18,
-          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "row_height" : 44
         }
       },
@@ -427,12 +427,12 @@
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
           "name" : "tableview_root",
+          "uuid" : "F7A02DDC-101B-4ADA-89CF-79DC28BB7078",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "uuid" : "F7A02DDC-101B-4ADA-89CF-79DC28BB7078",
           "data_source_delete_enabled" : true,
           "data_source_font_size" : 14,
-          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "row_height" : 36
         }
       },
@@ -448,12 +448,12 @@
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
           "name" : "tableview_type",
+          "uuid" : "6F4AF45A-CA92-4F1F-9FA7-FDB7C2B5D4C6",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "uuid" : "6F4AF45A-CA92-4F1F-9FA7-FDB7C2B5D4C6",
           "data_source_delete_enabled" : true,
           "data_source_font_size" : 18,
-          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "row_height" : 36
         }
       },
@@ -676,12 +676,12 @@
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
           "name" : "tableview_filters",
+          "uuid" : "2007CDE8-695A-4082-A64E-94FAAA6E8427",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "uuid" : "2007CDE8-695A-4082-A64E-94FAAA6E8427",
           "data_source_delete_enabled" : true,
           "data_source_font_size" : 18,
-          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "row_height" : 25
         }
       },
@@ -909,12 +909,12 @@
           "data_source_items" : "Row 1\nRow 2 >\nRow 3 (i)",
           "enabled" : true,
           "name" : "tableview_capos",
+          "uuid" : "CC48937E-8935-4F43-AC89-7C79F16A3E24",
+          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "data_source_number_of_lines" : 1,
           "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-          "uuid" : "CC48937E-8935-4F43-AC89-7C79F16A3E24",
           "data_source_delete_enabled" : true,
           "data_source_font_size" : 18,
-          "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
           "row_height" : 25
         }
       },
@@ -1516,8 +1516,8 @@
         }
       },
       {
-        "selected" : false,
-        "frame" : "{{0, 6}, {25, 25}}",
+        "selected" : true,
+        "frame" : "{{0, 644}, {25, 31}}",
         "class" : "Button",
         "nodes" : [
 
@@ -1673,7 +1673,7 @@
         }
       },
       {
-        "selected" : true,
+        "selected" : false,
         "frame" : "{{769, 58}, {168, 40}}",
         "class" : "Button",
         "nodes" : [
@@ -1696,10 +1696,10 @@
     "attributes" : {
       "flex" : "",
       "enabled" : true,
+      "tint_color" : "RGBA(0.000000,0.478000,1.000000,1.000000)",
       "border_color" : "RGBA(0.000000,0.000000,0.000000,1.000000)",
       "background_color" : "RGBA(1.000000,1.000000,1.000000,1.000000)",
-      "tint_color" : "RGBA(0.000000,0.478000,1.000000,1.000000)",
-      "name" : "Chord Calc2"
+      "name" : "ChordCalculus"
     }
   }
 ]
