@@ -81,3 +81,24 @@ def PathCenteredCircle(x,y,r):
 def PathCenteredSquare(x,y,r):
 	""" return a path for a filled centered circle """
 	return ui.Path.rect(x -r, y -r, 2*r,2*r)
+	
+def printViewPropeties(subview,superview=None):
+	if superview:
+		print("name: ", subview.name, " child of ",superview)
+	else:
+		print("name: ",subview.name)
+	print("view: ",subview)
+	print("frame: ",subview.frame)
+	print("backgound_color: ",subview.background_color)
+	print("border_color: ",subview.border_color)
+	print("border_width: ",subview.border_width)
+	print("corner_radius: ",subview.corner_radius)
+	print("flex: ",subview.flex)
+	print("\n")
+	if len(subview.subviews) != 0:
+		for childSub in subview.subviews:
+			printViewPropeties(childSub,subview.name)
+			print("\n")
+	
+	
+	

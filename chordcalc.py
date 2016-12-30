@@ -4234,16 +4234,12 @@ if __name__ == "__main__":
 		ccc.createConfig()
 	else:
 		ccc.restoreConfig()
-
-
-
+		
 	screenSize = ui.get_screen_size()
-#	aspect = screenSize[0]/screenSize[1]
-#	aspect = aspect if aspect > 1 else 1/aspect
 	screenHeight = min(screenSize)
 	screenWidth = max(screenSize)
 			
-	mainView = ui.load_view()	
+	mainView = ui.load_view()		
 	mainViewShield = Shield(mainView,local=True, name='mainview_shield')				
 	numChordsTextView = mainView['num_chords']
 	chordNumTextView = mainView['chord_num']
@@ -4397,3 +4393,4 @@ if __name__ == "__main__":
 	pub.sendMessage('setdefaultsettings')
 	tvFind.hidden = True
 	mainView.present(style='full_screen',orientations=('landscape',))
+	
