@@ -51,7 +51,8 @@ if '.' not in sys.path: sys.path.append('.')
 #--- Main imports
 import os.path, re, ui, console, sound, time, math, json, importlib, markdown2
 from operator import add
-import pubsub; importlib.reload(pubsub); from pubsub import pub
+import pubsub
+from pubsub import pub
 
 #delete all topics (need to do this in Pythonista)
 defaultPublisher = pub.getDefaultPublisher()
@@ -70,6 +71,26 @@ import DropDown; importlib.reload(DropDown); from DropDown import DropDown
 SettingsFileName = 'settings.ini'
 ConfigFileName = 'config.ini'
 InfoFile = 'info.md'
+
+vfh = open("viewfiles.txt", "w")
+viewcount = 0
+
+def printView(view, parent='none'):
+	global viewcount
+	viewcount += 1
+	if parent != 'none': vfh.write("\nParent: {}\n".format(parent.name))
+	vfh.write("Name              {}\n".format(view.name))
+	vfh.write("Frame =           {}\n".format(view.frame))
+	vfh.write("flex =            {}\n".format(view.flex))
+	vfh.write("Type =            {}\n".format(view))
+	vfh.write("background_color ={}\n".format(view.background_color))
+	vfh.write("border_width     ={}\n".format(view.border_width))
+	vfh.write("corner_radius    ={}\n".format(view.corner_radius))
+	vfh.write("number subviews  ={}\n".format(len(view.subviews)))
+	vfh.write("")
+	for subview in view.subviews:
+		printView(subview,parent=view)
+
 
 #--- CCC 
 class CCC(object):
@@ -458,7 +479,6 @@ class Model(object):
 		
 	def setDoubleStopFlag(self,state=None):
 		self._DoubleStopFlag = state
-		assert 0
 		
 	def changeSpan(self,data=None):
 		self._Span = data
@@ -649,6 +669,8 @@ class Model(object):
 			button.frame = (buttonX,buttonY,self._Edit_buttonWidth,self._Edit_buttonHeight)
 			button.hidden = False
 			button.bring_to_front()
+		for name in 	self._editableTables:
+			mainView[name].bring_to_front()
 	
 	def tableEditDone(self,button):
 		for key in self._TableEditButtons.keys():
@@ -884,6 +906,7 @@ class Model(object):
 		return 'generic',waveDir	
 		
 	def calc_fingerings(self,chordtypeEntry=None):
+
 		'''calculate the fingerings and fretboard positions for the desired chord
 		if chordtypeEntry is passed, this is part of a progression '''
 		
@@ -912,24 +935,24 @@ class Model(object):
 			
 		filterSet = self._Filters if self._Filters else []
 		result = None
-		fingerPositions = []
-		fingerings = []
+		fingeringPositions = []
+		chordFingerings = [] 
 		result = []
 		for position in range(0,fretboard.numFrets-span):
 			fingeringThisPosition = self.findFingerings(position,rootValue)
 			if fingeringThisPosition:
-				fingerings = fingerings + fingeringThisPosition
-		fingerings = uniqify(fingerings,idfun=(lambda x: tuple(x)))
-		centroids = [chordFingeringCentroid(x) for x in fingerings]
-		if fingerings:
-			for fingering in fingerings:
-				fingerMarker = fretboard.fingeringDrawPositions(rootValue,chordtype,tuning,fingering)
-				fingerPositions.append(fingerMarker)
-			for fingering,drawposition,centroid in zip(fingerings,fingerPositions,centroids):
+				chordFingerings = chordFingerings + fingeringThisPosition
+		chordFingerings = uniqify(chordFingerings,idfun=(lambda x: tuple(x)))
+		centroids = [chordFingeringCentroid(x) for x in chordFingerings]
+		if chordFingerings:
+			for chordFingering in chordFingerings:
+				fingerMarker = fretboard.fingeringDrawPositions(rootValue,chordtype,tuning,chordFingering)
+				fingeringPositions.append(fingerMarker)
+			for chordFingering,drawpositions,centroid in zip(chordFingerings,fingeringPositions,centroids):
 				chordTones = []
-				for entry in drawposition:
-					chordTones.append(entry[2])
-				result.append((drawposition,chordTones,fingering,centroid))
+				for entry in drawpositions:
+					chordTones.append(entry[2]) # extracted from drawposition strings 
+				result.append((drawpositions,chordTones,chordFingering,centroid))
 			if filters:
 				result = apply_filters(filterSet, result)
 				if result:
@@ -937,14 +960,34 @@ class Model(object):
 		self._FingeringPointer = 0 
 		if len(result) == 0:
 			self.noChords()
-		return result if model._DoubleStopFlag else sorted(result,key=(lambda x:[3])) 
+			return None
+		return self.sortDoubleStop(result) if model._DoubleStopFlag else sorted(result,key=(lambda x:[-1])) 
 		
+	def sortDoubleStop(self,fingeringResult):
+		# need to build a working array with supercentroid
+		# centroids run from 1-14
+		# so add the string number * 100 to the centroid 
+		working = []
+		for entry in fingeringResult:
+			centroid = entry[-1]
+			sum = 0
+			for i,fret in enumerate(entry[2]):
+				if fret >= 0:
+					sum += i*100
+			supersum = centroid + sum
+			working.append([entry[0], entry[1], entry[2],supersum])
+		working = sorted(working,key=(lambda x: x[3]))
+		return [[x[0],x[1],x[2],x[3]] for x in working]
 		
+				
 		
+
+# Capos:
+
 	def findFingerings(self,position,rootValue):
 		# Get valid frets on the strings
 		
-		validfrets = self.findValidFrets(position,rootValue)
+		validfrets = self.findValidFrets(position,rootValue) 
 		
 		# Find all candidates
 		candidates = self.findCandidates(validfrets)
@@ -1020,17 +1063,14 @@ class Model(object):
 			# get the candidate
 			candidate = []
 			for string, fret in enumerate(counter):
-			
 				candidate.append(candidatefrets[string][fret])
-				
 			# increment counter, starting from highest index string
 			for i, v in enumerate(counter):
 				if counter[l-i] < max_counter[l-i]:
 					counter[l-i] += 1
 					break
 				else:
-					counter[l-i] = 0
-					
+					counter[l-i] = 0	
 			candidates += [candidate]
 		return candidates
 		
@@ -1215,28 +1255,9 @@ class Model(object):
 
 # fingering positions for drawing
 
-	def fingeringDrawPositions(self,key,chordtype,tuning,fingering):
-		""" given a fingering,chord and tuning information and virtual neck info,
-		return the center positions all markers.  X and open strings will be
-		marked at the nut"""
-		scaleNotes = self.getScaleNotes(fingering)
-		#if len(scaleNotes) != len(fingering):
-		chordDrawPositions = []
-		numStrings,offset,ss = fretboard.stringSpacing()
-		for i,fretPosition in enumerate(fingering): #loop over strings, low to high
-			try:
-				note = scaleNotes[i]
-			except:
-				continue
-			atNut = None
-			xpos = offset + i*ss
-			if fretPosition in [-1,0]: #marker at nut
-				ypos = int(0.5* self.nutOffset)
-				atNut = 'X' if fretPosition else 'O'
-			else:
-				ypos = fretboard.fretboardYPos(fretPosition)
-			chordDrawPositions.append((xpos,ypos,note,atNut))
-		return chordDrawPositions
+  
+
+
 					
 	def calc_two_octave_scale(self):
 		''' given a starting (string,scaletoneIndex) calculate a two octave scale across the 
@@ -3515,10 +3536,11 @@ class Progr(TVTools,object):
 #--- global functions
 
 def apply_filters(filters,fingerings):
+
 	''' for the current fingerings and filters, return only those chords that apply'''
 	filter_constraint = {'FULL_CHORD':("R b3 3 #5 5".split(),3)}
 	instrumentType,_ = model.instrument_type()
-	pub.sendMessage('setDoubleStopFlag',state=False)
+	model.setDoubleStopFlag(state=False)
 	if not filters:
 		return fingerings
 	filtered = []
@@ -3625,7 +3647,7 @@ def apply_filters(filters,fingerings):
 		
 	filtered = []
 	if 'DOUBLE_STOPS' in filters and instrumentType == 'mando': # create adjacent string double stops for the chords
-		pub.sendMessage('setDoubleStopFlag',flag=True)
+		model.setDoubleStopFlag(state=True)
 		numStrings = len(fingerings[0][1])
 		for fingering in temp_fingerings:
 			for i,string in enumerate(fingering[1]):
@@ -3651,7 +3673,9 @@ def apply_filters(filters,fingerings):
 								field2.append(fingering[1][index])
 								field3.append(fingering[2][index])
 							j += 2
-					entry = (field1,field2,field3)
+					# recalculate centroid here
+					centroid = chordFingeringCentroid(field3)
+					entry = [field1,field2,field3,centroid]
 					filtered.append(entry)
 		temp_fingerings = filtered
 		
@@ -3669,7 +3693,7 @@ def apply_filters(filters,fingerings):
 			if validChord:
 				filtered.append(fingering)
 		temp_fingerings = filtered
-	unique =  uniqify(temp_fingerings,idfun= (lambda x: tuple(x[2])))
+	unique =  uniqify(temp_fingerings,idfun= (lambda x: x[3]))
 	return unique
 	
 	
@@ -3958,8 +3982,10 @@ def play(button):
 					thisFingering = model._ProgFingeringsPointers[model._ProgChordPointer]
 					cc = model._ProgFingerings[model._ProgChordPointer][thisFingering]
 			except TypeError: # no chords yet
+				print ('typeerror')
 				return
 			except IndexError: #oops
+				print('indexerror')
 				return
 	
 			frets = cc[2]
@@ -3980,11 +4006,9 @@ def play(button):
 			for i,pitch in enumerate(strings):
 				if i in position_dict:
 					octave,tone = divmod(pitch + position_dict[i],12)
-					tones.append((tone,octave+baseOctave))
-					
+					tones.append((tone,octave+baseOctave))					
 		else: #scale
-			pass
-			
+			pass			
 		for tone,octave in tones:
 			sound.play_effect(getWaveName(tone,octave))
 			time.sleep(model.play_arpSpeed*0.25)
@@ -4288,7 +4312,7 @@ if __name__ == "__main__":
 	tvFind.hidden = True
 	
 	tvScale = mainView['tableview_scale']
-	tvScale.data_source.items = []
+	#tv ddata_source.items = []
 	tvScale.hidden = True
 	scale = Scale(ccc['SCALE_LIST_CLEAN'])
 	tvScale.data_source = tvScale.delegate = scale
@@ -4393,4 +4417,5 @@ if __name__ == "__main__":
 	pub.sendMessage('setdefaultsettings')
 	tvFind.hidden = True
 	mainView.present(style='full_screen',orientations=('landscape',))
+
 	
